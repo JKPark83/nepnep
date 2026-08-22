@@ -14,6 +14,12 @@ enum DesignTokens {
     static let statusProcessing = Color(light: 0xB4741C, dark: 0xE0A34A)
     static let statusFailed = Color(light: 0xB03A31, dark: 0xFF8579)
 
+    /// 앱 마크 바탕 그라데이션 (와이어프레임 2a)
+    static let markFill = [Color(light: 0x12968B, dark: 0x3FBFB0),
+                           Color(light: 0x0B6961, dark: 0x0F7A72)]
+    /// 앱 마크 안쪽 파형 색 — 바탕과 대비를 유지한다
+    static let markGlyph = Color(light: 0xFFFFFF, dark: 0x08201E)
+
     /// 화자 아바타 팔레트 — Speaker.colorIndex 0..7 순환 (와이어프레임 1e·1f)
     static let speakerColors: [Color] = [
         Color(light: 0x0F7A72, dark: 0x0F7A72),

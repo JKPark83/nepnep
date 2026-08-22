@@ -31,6 +31,7 @@ struct HomeView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
+                brandHeader
                 if ModelAssetManager.shared.isPreparingAssets {
                     assetPreparingBanner
                 }
@@ -45,7 +46,9 @@ struct HomeView: View {
             fabLayer
         }
         .background(DesignTokens.background)
-        .navigationTitle("넵넵")
+        // 이름은 아래 brandHeader가 그린다 — 내비게이션 바에는 검색·아이콘만 남긴다
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -79,6 +82,16 @@ struct HomeView: View {
             }
             Button("취소", role: .cancel) { renameTarget = nil }
         }
+    }
+
+    // MARK: - 앱 이름 영역 (와이어프레임 2b 타이포 락업 + 2a 마크)
+
+    private var brandHeader: some View {
+        BrandLockupView()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, DesignTokens.margin)
+            .padding(.top, 4)
+            .padding(.bottom, 14)
     }
 
     // MARK: - 목록
