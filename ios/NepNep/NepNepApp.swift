@@ -18,8 +18,6 @@ struct NepNepApp: App {
         ProcessingCoordinator.shared.register()
         // 알림 탭 → 상세 딥링크 (04-m2 §5)
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
-        // 구독 상태 판정 + Transaction.updates 상시 구독 (07-m5 §1)
-        PurchaseService.shared.start()
         #if DEBUG
         DebugSeed.seedIfNeeded(context: container.mainContext)
         #endif

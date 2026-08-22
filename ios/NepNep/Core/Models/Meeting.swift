@@ -30,10 +30,6 @@ enum MeetingStatus: String, Codable {
     case failed
 }
 
-enum ProcessingMode: String, Codable {
-    case onDevice, cloud
-}
-
 /// 인터럽트 등으로 녹음이 비어 있는 구간
 struct GapRange: Codable, Equatable {
     var start: TimeInterval
@@ -52,7 +48,6 @@ final class Meeting {
     var processingProgress: Double
     var audioFileName: String?
     var audioSize: Int64
-    var processingModeRaw: String
     var notionPageURL: String?
     var googleDocURL: String?
     var gapRanges: [GapRange]
@@ -78,7 +73,6 @@ final class Meeting {
         self.processingProgress = 0
         self.audioFileName = nil
         self.audioSize = 0
-        self.processingModeRaw = ProcessingMode.onDevice.rawValue
         self.notionPageURL = nil
         self.googleDocURL = nil
         self.gapRanges = []
@@ -97,11 +91,6 @@ final class Meeting {
     var status: MeetingStatus {
         get { MeetingStatus(rawValue: statusRaw) ?? .failed }
         set { statusRaw = newValue.rawValue }
-    }
-
-    var processingMode: ProcessingMode {
-        get { ProcessingMode(rawValue: processingModeRaw) ?? .onDevice }
-        set { processingModeRaw = newValue.rawValue }
     }
 
     /// "8월 22일 일반 회의" 형태의 자동 제목 (와이어프레임 1c 노트 1)

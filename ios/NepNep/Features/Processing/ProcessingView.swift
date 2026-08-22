@@ -179,44 +179,15 @@ struct ProcessingView: View {
     private var bottomButtons: some View {
         VStack(spacing: 12) {
             if meeting.status == .failed {
-                switch failureReason {
-                case .cloudFailed, .quotaExceeded:
-                    // F9-4: 온디바이스 폴백 (사용량 미차감 — 클라우드 차감은 완료 시에만 발생)
-                    Button {
-                        CloudJobCheckpoint.clear(meetingID: meeting.id)
-                        meeting.processingMode = .onDevice
-                        ProcessingCoordinator.shared.enqueue(meeting: meeting)
-                    } label: {
-                        Text("기기에서 처리하기")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity, minHeight: DesignTokens.buttonHeight)
-                            .background(DesignTokens.accent)
-                            .foregroundStyle(.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 14))
-                    }
-                    if failureReason == .cloudFailed {
-                        Button {
-                            ProcessingCoordinator.shared.enqueue(meeting: meeting)
-                        } label: {
-                            Text("클라우드로 다시 시도")
-                                .font(.headline)
-                                .frame(maxWidth: .infinity, minHeight: DesignTokens.buttonHeight)
-                                .background(DesignTokens.card)
-                                .foregroundStyle(DesignTokens.textPrimary)
-                                .clipShape(RoundedRectangle(cornerRadius: 14))
-                        }
-                    }
-                default:
-                    Button {
-                        ProcessingCoordinator.shared.enqueue(meeting: meeting)
-                    } label: {
-                        Text("다시 시도")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity, minHeight: DesignTokens.buttonHeight)
-                            .background(DesignTokens.accent)
-                            .foregroundStyle(.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 14))
-                    }
+                Button {
+                    ProcessingCoordinator.shared.enqueue(meeting: meeting)
+                } label: {
+                    Text("다시 시도")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity, minHeight: DesignTokens.buttonHeight)
+                        .background(DesignTokens.accent)
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
                 }
             }
             if meeting.status == .done {

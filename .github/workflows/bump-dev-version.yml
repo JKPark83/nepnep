@@ -1,0 +1,110 @@
+# 상용 릴리스 태그가 push되면 다음 개발 minor 버전을 dev에 반영한다.
+#
+# 지원 태그: 1.1, 1.1.0, v1.1, v1.1.0
+# 예: v1.1.0 릴리스 -> dev의 MARKETING_VERSION을 1.2로 갱신
+# 태그가 main 이력에 없거나 dev가 이미 같은 버전 이상이면 변경하지 않는다.
+name: bump-dev-version
+
+on:
+  push:
+    tags:
+      - "v[0-9]*.[0-9]*"
+      - "[0-9]*.[0-9]*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bump-dev-version
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      - name: main 릴리스 태그인지 확인
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          git fetch --force origin \
+            "+refs/heads/main:refs/remotes/origin/main" \
+            "+refs/tags/${TAG_NAME}:refs/tags/${TAG_NAME}"
+          release_commit=$(git rev-parse "refs/tags/${TAG_NAME}^{commit}")
+          if ! git merge-base --is-ancestor "$release_commit" origin/main; then
+            echo "태그 ${TAG_NAME}는 main 이력에 없는 커밋을 가리킨다."
+            exit 1
+          fi
+
+      - name: 다음 minor 버전 계산 및 반영
+        id: version
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          tag = os.environ["TAG_NAME"]
+          match = re.fullmatch(r"v?(\d+)\.(\d+)(?:\.(\d+))?", tag)
+          if not match:
+              raise SystemExit(f"지원하지 않는 릴리스 태그 형식: {tag}")
+
+          major = int(match.group(1))
+          minor = int(match.group(2)) + 1
+          next_version = f"{major}.{minor}"
+          next_tuple = (major, minor, 0)
+
+          path = Path("ios/project.yml")
+          content = path.read_text()
+          pattern = re.compile(
+              r'(?m)^(?P<prefix>\s*MARKETING_VERSION:\s*")'
+              r'(?P<version>\d+(?:\.\d+){1,2})'
+              r'(?P<suffix>".*)$'
+          )
+          current_match = pattern.search(content)
+          if not current_match:
+              raise SystemExit("ios/project.yml에서 MARKETING_VERSION을 찾지 못했다.")
+
+          current = current_match.group("version")
+          current_parts = tuple(int(part) for part in current.split("."))
+          current_tuple = current_parts + (0,) * (3 - len(current_parts))
+
+          changed = current_tuple < next_tuple
+          if changed:
+              content = pattern.sub(
+                  lambda found: (
+                      f'{found.group("prefix")}{next_version}{found.group("suffix")}'
+                  ),
+                  content,
+                  count=1,
+              )
+              path.write_text(content)
+              print(f"MARKETING_VERSION: {current} -> {next_version}")
+          else:
+              print(
+                  f"MARKETING_VERSION {current}은 태그 {tag}의 다음 minor "
+                  f"{next_version} 이상이므로 변경하지 않는다."
+              )
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"changed={'true' if changed else 'false'}\n")
+              output.write(f"version={next_version}\n")
+          PY
+
+      - name: dev에 버전 인상 커밋
+        if: steps.version.outputs.changed == 'true'
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+          NEXT_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ios/project.yml
+          git commit -m "chore: 다음 개발 버전을 ${NEXT_VERSION}로 인상 (${TAG_NAME})"
+          git push origin HEAD:dev
