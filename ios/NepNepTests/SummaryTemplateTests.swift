@@ -20,6 +20,15 @@ final class SummaryTemplateTests: XCTestCase {
         }
     }
 
+    /// reduce instructions는 4종 모두 title 지시를 포함한다 (공통 base)
+    func testInstructionsCoverTitle() {
+        for type in MeetingType.allCases {
+            XCTAssertTrue(SummaryTemplates.template(for: type).instructions.contains("title"))
+        }
+        // map 단계는 title을 만들지 않으므로 지시가 없어야 한다
+        XCTAssertFalse(SummaryTemplates.mapInstructions.contains("title"))
+    }
+
     /// "내용|담당자|기한" 파싱 — 전체/부분/파이프 없음/빈 항목
     func testParseActionItem() {
         let full = SummaryTemplates.parseActionItem("문서 공유|김철수|8월 26일")
