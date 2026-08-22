@@ -58,6 +58,12 @@ final class ExportService {
         UserDefaults.standard.set(name, forKey: Self.lastFolderNameKey)
     }
 
+    /// 폴더 선택 해제 — 내 드라이브 최상위에 만든다
+    func forgetFolder() {
+        UserDefaults.standard.removeObject(forKey: Self.lastFolderIDKey)
+        UserDefaults.standard.removeObject(forKey: Self.lastFolderNameKey)
+    }
+
     func rememberTarget(_ target: ExportTarget) {
         UserDefaults.standard.set(target.rawValue, forKey: Self.lastTargetKey)
     }
@@ -94,7 +100,8 @@ final class ExportService {
         }
     }
 
-    func exportGoogle(meeting: Meeting, folderID: String) {
+    /// folderID가 nil이면 내 드라이브 최상위에 만든다 (08-m5 §2)
+    func exportGoogle(meeting: Meeting, folderID: String?) {
         guard exportTask == nil else { return }
         runningTarget = .google
         rememberTarget(.google)
@@ -180,7 +187,7 @@ final class ExportService {
     // MARK: - Google 내부 흐름 (08-m5 §2·3)
 
     private func runGoogle(meeting: Meeting,
-                           folderID: String) async throws -> (docURL: String, updated: Bool) {
+                           folderID: String?) async throws -> (docURL: String, updated: Bool) {
         let token = try await GoogleAuthService.shared.validAccessToken()
         let client = GoogleDocsClient(token: token)
         let paragraphs = Self.buildGoogleParagraphs(meeting: meeting)
@@ -211,7 +218,9 @@ final class ExportService {
         try await client.batchUpdate(
             documentID: documentID,
             requests: GoogleDocsRequestBuilder.insertRequests(paragraphs: paragraphs))
-        try? await client.moveToFolder(fileID: documentID, folderID: folderID)
+        if let folderID {
+            try? await client.moveToFolder(fileID: documentID, folderID: folderID)
+        }
         return (GoogleDocsClient.docURL(documentID: documentID), false)
     }
 
@@ -230,8 +239,8 @@ final class ExportService {
                     try? meeting.modelContext?.save()
                 }
             }
-            if GoogleAuthService.shared.isConnected, let folderID = lastFolderID {
-                if let result = try? await runGoogle(meeting: meeting, folderID: folderID) {
+            if GoogleAuthService.shared.isConnected {
+                if let result = try? await runGoogle(meeting: meeting, folderID: lastFolderID) {
                     meeting.googleDocURL = result.docURL
                     try? meeting.modelContext?.save()
                 }
