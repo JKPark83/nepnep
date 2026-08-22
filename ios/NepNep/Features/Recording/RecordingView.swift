@@ -13,9 +13,6 @@ struct RecordingView: View {
     @State private var isEditingTitle = false
     @State private var editedTitle = ""
     @State private var finishedMeeting: Meeting?
-    @State private var purchase = PurchaseService.shared
-    @State private var cloudEnabled = false
-    @State private var showPaywall = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -32,8 +29,6 @@ struct RecordingView: View {
                 .padding(.top, 24)
             silenceHint
             Spacer()
-            cloudToggleCard
-                .padding(.horizontal, DesignTokens.margin)
             controls
                 .padding(.vertical, 32)
         }
@@ -160,58 +155,6 @@ struct RecordingView: View {
                 .foregroundStyle(DesignTokens.statusProcessing)
                 .padding(.top, 8)
         }
-    }
-
-    private var cloudToggleCard: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text("고품질 클라우드 처리")
-                        .font(.subheadline.weight(.medium))
-                    Text("PRO")
-                        .font(.caption2.bold())
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(DesignTokens.accent.opacity(0.15))
-                        .foregroundStyle(DesignTokens.accent)
-                        .clipShape(Capsule())
-                }
-                Text("이름·전문 용어 인식이 더 정확해져요")
-                    .font(.caption)
-                    .foregroundStyle(DesignTokens.textSecondary)
-            }
-            Spacer()
-            // 무료: 켜는 순간 페이월 표시 + 토글 원복 (1c 노트 3, F9-3)
-            Toggle("", isOn: cloudToggleBinding)
-                .labelsHidden()
-                .tint(DesignTokens.accent)
-        }
-        .padding()
-        .background(DesignTokens.card)
-        .clipShape(RoundedRectangle(cornerRadius: DesignTokens.cardRadius))
-        .sheet(isPresented: $showPaywall) {
-            PaywallView {
-                setCloudEnabled(true)   // 구매 성공 → 토글 켜짐 (1i)
-            }
-        }
-    }
-
-    private var cloudToggleBinding: Binding<Bool> {
-        Binding {
-            cloudEnabled
-        } set: { newValue in
-            if newValue && !purchase.isPro {
-                showPaywall = true
-                return
-            }
-            setCloudEnabled(newValue)
-        }
-    }
-
-    private func setCloudEnabled(_ enabled: Bool) {
-        cloudEnabled = enabled
-        session.currentMeeting?.processingModeRaw =
-            (enabled ? ProcessingMode.cloud : .onDevice).rawValue
     }
 
     private var controls: some View {

@@ -35,6 +35,4 @@ enum ProcessingFailureReason: String, Codable {
     case assetMissing   // 선택 엔진 모델 미설치
     case diskFull
     case engineError
-    case cloudFailed    // 클라우드 처리 실패 — 온디바이스 폴백 제안 (07-m5 F9-4)
-    case quotaExceeded  // 월 클라우드 시간 소진 (07-m5 §4)
 }

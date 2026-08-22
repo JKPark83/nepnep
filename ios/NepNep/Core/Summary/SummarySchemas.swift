@@ -16,14 +16,6 @@ struct ChunkDigest: Codable {
 /// reduce 단계 — 최종 요약
 @Generable
 struct FinalSummary {
-    /// 클라우드 요약 결과를 같은 반영 경로(SummaryService.apply)로 흘리기 위한 생성자 (07-m5 §3)
-    init(oneLiner: String, keyPoints: [String], decisions: [String], actionItems: [String]) {
-        self.oneLiner = oneLiner
-        self.keyPoints = keyPoints
-        self.decisions = decisions
-        self.actionItems = actionItems
-    }
-
     @Guide(description: "회의 전체 한 줄 요약, 한국어 60자 이내")
     var oneLiner: String
     @Guide(description: "주요 논의 불릿 3~6개, 한국어 한 문장씩")

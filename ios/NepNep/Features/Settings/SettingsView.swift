@@ -1,17 +1,14 @@
 import SwiftUI
 
-/// 설정 — 연동(M4) + 구독·사용량(M5) 섹션 (와이어프레임 1h)
+/// 설정 — 연동(M4) 섹션 (와이어프레임 1h)
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var auth = NotionAuthService.shared
     @State private var googleAuth = GoogleAuthService.shared
     @State private var service = ExportService.shared
-    @State private var purchase = PurchaseService.shared
-    @State private var usage = UsageTracker.shared
     @State private var connectError: String?
     @State private var showDisconnectConfirm = false
     @State private var showGoogleDisconnectConfirm = false
-    @State private var showPaywall = false
     @AppStorage(ExportService.autoExportKey) private var autoExport = false
     @AppStorage(MeetingType.defaultKey) private var defaultTypeRaw = MeetingType.general.rawValue
     @AppStorage(NotificationService.doneNotificationKey) private var doneNotification = true
@@ -63,8 +60,6 @@ struct SettingsView: View {
                     .disabled(!auth.isConnected && !googleAuth.isConnected)
                 }
 
-                subscriptionSection
-
                 StorageSection()
 
                 defaultsSection
@@ -85,14 +80,6 @@ struct SettingsView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("닫기") { dismiss() }
                         .tint(DesignTokens.accent)
-                }
-            }
-            .sheet(isPresented: $showPaywall) {
-                PaywallView()
-            }
-            .task {
-                if purchase.isPro {
-                    await CloudPipelineClient.shared.refreshUsage()
                 }
             }
             .confirmationDialog("Notion 연결을 해제할까요?",
@@ -149,68 +136,6 @@ struct SettingsView: View {
                      as? String ?? "1.0")
                     .font(.footnote)
                     .foregroundStyle(DesignTokens.textSecondary)
-            }
-        }
-    }
-
-    // MARK: - 구독 섹션 (1h)
-
-    private var subscriptionSection: some View {
-        Section("구독") {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 7) {
-                    Text(purchase.isPro ? "프로 플랜" : "무료 플랜")
-                        .font(.headline)
-                        .foregroundStyle(DesignTokens.textPrimary)
-                    Text(purchase.isPro ? "월 20시간" : "온디바이스 무제한")
-                        .font(.caption.weight(.medium))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(DesignTokens.textSecondary.opacity(0.12), in: Capsule())
-                        .foregroundStyle(DesignTokens.textSecondary)
-                }
-                Text(purchase.isPro
-                     ? "클라우드 고품질 처리를 사용할 수 있어요"
-                     : "클라우드 고품질 처리는 프로에서 사용할 수 있어요")
-                    .font(.caption)
-                    .foregroundStyle(DesignTokens.textSecondary)
-            }
-            .padding(.vertical, 4)
-
-            // 무료 사용자에게도 사용량 행 노출 (1h 노트 2)
-            VStack(alignment: .leading, spacing: 9) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("이번 달 클라우드 사용")
-                        .font(.subheadline)
-                        .foregroundStyle(DesignTokens.textPrimary)
-                    Spacer()
-                    Text(UsageTracker.usageText(usedSeconds: usage.usedSeconds))
-                        .font(.subheadline.weight(.semibold))
-                        .monospacedDigit()
-                        .foregroundStyle(DesignTokens.textPrimary)
-                }
-                ProgressView(value: usage.usedSeconds,
-                             total: UsageTracker.monthlyLimitSeconds)
-                    .tint(DesignTokens.accent)
-                Text("매월 1일 초기화")
-                    .font(.caption)
-                    .foregroundStyle(DesignTokens.textSecondary.opacity(0.7))
-            }
-            .padding(.vertical, 4)
-
-            if !purchase.isPro {
-                Button {
-                    showPaywall = true
-                } label: {
-                    HStack {
-                        Text("프로 자세히 보기")
-                            .font(.body.weight(.semibold))
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.footnote.bold())
-                    }
-                    .foregroundStyle(DesignTokens.accent)
-                }
             }
         }
     }

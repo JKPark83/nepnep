@@ -80,7 +80,6 @@ schemes:
         NepNep: all
     run:
       config: Debug
-      storeKitConfiguration: NepNep/NepNep.storekit
     test:
       config: Debug
       targets: [NepNepTests]
