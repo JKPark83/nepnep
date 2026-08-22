@@ -1,0 +1,81 @@
+name: NepNep
+options:
+  bundleIdPrefix: com.nepnep
+  deploymentTarget:
+    iOS: "26.0"
+packages:
+  FluidAudio:
+    url: https://github.com/FluidInference/FluidAudio.git
+    from: 0.12.4
+settings:
+  base:
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: WDNVP9B8A9
+    TARGETED_DEVICE_FAMILY: "1"
+    SWIFT_VERSION: "5.0"
+    GENERATE_INFOPLIST_FILE: NO
+targets:
+  NepNep:
+    type: application
+    platform: iOS
+    sources:
+      - NepNep
+      - Shared
+    dependencies:
+      - target: NepNepWidgets
+      - package: FluidAudio
+    settings:
+      base:
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    info:
+      path: NepNep/Info.plist
+      properties:
+        CFBundleDisplayName: 넵넵
+        UILaunchStoryboardName: LaunchScreen
+        NSMicrophoneUsageDescription: 회의 음성을 녹음해 기기 안에서 회의록으로 정리합니다.
+        NSSpeechRecognitionUsageDescription: 녹음한 회의 음성을 기기 안에서 글로 옮겨 회의록을 만듭니다.
+        NSSupportsLiveActivities: true
+        UIBackgroundModes: [audio]
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.nepnep.processing
+          - com.nepnep.processing.continued
+        CFBundleURLTypes:
+          - CFBundleURLName: com.nepnep.NepNep.oauth
+            CFBundleURLSchemes: [nepnep]
+  NepNepWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - NepNepWidgets
+      - Shared
+    info:
+      path: NepNepWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: NepNepWidgets
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        SKIP_INSTALL: YES
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) WIDGET_EXTENSION"
+        PRODUCT_BUNDLE_IDENTIFIER: com.nepnep.NepNep.widgets
+  NepNepTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [NepNepTests]
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: NepNep
+schemes:
+  NepNep:
+    build:
+      targets:
+        NepNep: all
+    run:
+      config: Debug
+      storeKitConfiguration: NepNep/NepNep.storekit
+    test:
+      config: Debug
+      targets: [NepNepTests]

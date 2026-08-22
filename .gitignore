@@ -1,0 +1,21 @@
+# macOS
+.DS_Store
+
+# Node
+node_modules/
+
+# Vercel
+.vercel
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+.swiftpm/
+*.xcworkspace/xcshareddata/swiftpm/.build/
+
+# 환경 변수
+.env
+.env.*
+!.env.example
