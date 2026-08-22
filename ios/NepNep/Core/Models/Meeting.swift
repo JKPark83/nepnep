@@ -100,6 +100,31 @@ final class Meeting {
         fmt.dateFormat = "M월 d일"
         return "\(fmt.string(from: date)) \(type.displayName) 회의"
     }
+
+    /// 요약이 뽑아낸 주제로 만든 "2026-08-22 - 킥오프 일정 조율" 형태의 제목.
+    /// 주제가 비면 nil — 호출 측이 기존 제목을 유지한다.
+    static func summaryTitle(topic: String, date: Date) -> String? {
+        let trimmed = topic.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return "\(isoDatePrefix(date))\(trimmed)"
+    }
+
+    /// 사용자가 직접 바꾸지 않은 제목인지 — 자동 제목이거나 이전 요약이 만든 제목.
+    /// 후자를 포함해야 템플릿 변경 재요약에서 제목이 첫 요약 결과로 굳지 않는다.
+    static func isAutoTitle(_ title: String, date: Date) -> Bool {
+        if MeetingType.allCases.contains(where: { autoTitle(type: $0, date: date) == title }) {
+            return true
+        }
+        return title.hasPrefix(isoDatePrefix(date))
+    }
+
+    /// 제목은 정렬·검색·파일명으로 흘러가는 값이라 앱의 "M월 d일" 표기 대신 ISO를 쓴다
+    private static func isoDatePrefix(_ date: Date) -> String {
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.dateFormat = "yyyy-MM-dd"
+        return "\(fmt.string(from: date)) - "
+    }
 }
 
 @Model

@@ -24,6 +24,14 @@ final class StorageCalcTests: XCTestCase {
         XCTAssertEqual(StorageCalc.byteText(2_000_000_000), "2GB")
         XCTAssertEqual(StorageCalc.byteText(300_000_000), "0.3GB")
         XCTAssertEqual(StorageCalc.byteText(12_000_000), "12MB")
-        XCTAssertEqual(StorageCalc.byteText(0), "0MB")
+        XCTAssertEqual(StorageCalc.byteText(99_000_000), "99MB")
+    }
+
+    // 1MB 미만은 "0MB"로 버리지 않고 KB로 드러낸다
+    func testByteTextBelowOneMegabyte() {
+        XCTAssertEqual(StorageCalc.byteText(1_900_000), "1.9MB")
+        XCTAssertEqual(StorageCalc.byteText(500_000), "500KB")
+        XCTAssertEqual(StorageCalc.byteText(400), "1KB")     // 0KB로 사라지지 않게
+        XCTAssertEqual(StorageCalc.byteText(0), "0KB")
     }
 }

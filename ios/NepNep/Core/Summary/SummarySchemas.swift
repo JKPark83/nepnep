@@ -16,6 +16,8 @@ struct ChunkDigest: Codable {
 /// reduce 단계 — 최종 요약
 @Generable
 struct FinalSummary {
+    @Guide(description: "회의 주제를 나타내는 제목, 한국어 20자 이내. 날짜와 '회의' 같은 군더더기 없이 핵심 주제만")
+    var title: String
     @Guide(description: "회의 전체 한 줄 요약, 한국어 60자 이내")
     var oneLiner: String
     @Guide(description: "주요 논의 불릿 3~6개, 한국어 한 문장씩")

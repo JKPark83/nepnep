@@ -32,6 +32,8 @@ struct RecordingView: View {
             controls
                 .padding(.vertical, 32)
         }
+        .contentWidthLimited()
+        .frame(maxWidth: .infinity)
         .background(DesignTokens.background)
         .task {
             if session.state == .idle {

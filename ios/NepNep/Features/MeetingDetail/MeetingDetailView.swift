@@ -35,9 +35,18 @@ struct MeetingDetailView: View {
             }
             .padding(.horizontal, DesignTokens.margin)
             .padding(.bottom, 120)   // 하단 고정 바 여백
+            // 읽는 화면이라 폼보다 조금 넓게 잡는다 — 전사 한 줄이 너무 길어지지 않을 정도
+            .contentWidthLimited(760)
         }
         .safeAreaInset(edge: .bottom) { bottomBar(meeting) }
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                ShareSummaryMenu(meeting: meeting) {
+                    Image(systemName: "square.and.arrow.up")
+                }
+                .accessibilityLabel("요약 공유")
+                .tint(DesignTokens.accent)
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     showSpeakerSheet = true
@@ -123,6 +132,7 @@ struct MeetingDetailView: View {
         }
         .padding(.horizontal, DesignTokens.margin)
         .padding(.vertical, 10)
+        .contentWidthLimited(760)
         .background(.ultraThinMaterial)
     }
 

@@ -41,6 +41,7 @@ struct ModelDownloadView: View {
             Spacer()
             Spacer()
         }
+        .contentWidthLimited()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(DesignTokens.background)
         .task { await manager.runInitialSetup() }
