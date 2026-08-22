@@ -1,0 +1,232 @@
+# main 머지 → TestFlight 자동 업로드
+#
+# 흐름: xcodegen → 테스트 → 빌드번호·마케팅버전 결정 → 아카이브(배포 서명) → .ipa → App Store Connect 업로드.
+# 테스트가 깨지면 아카이브 단계로 넘어가지 않는다 — 깨진 빌드를 TestFlight로 내보내지 않기 위함.
+#
+# 빌드 번호는 project.yml의 CURRENT_PROJECT_VERSION을 쓰지 않고
+# App Store Connect에 이미 올라간 빌드 중 가장 큰 번호 +1로 정해 xcodebuild 인자로 주입한다.
+# (로컬에서 수동 업로드를 섞어도 번호가 충돌하지 않는다. project.yml은 로컬 빌드용 기본값으로만 남는다.)
+#
+# 마케팅 버전(CFBundleShortVersionString)도 업로드 전에 CI가 판정한다 — App Store 심사가 승인된
+# 버전은 pre-release train이 닫혀 재사용할 수 없으므로(altool 90186/90062), 승인된 최신 버전을
+# 조회해 project.yml의 MARKETING_VERSION이 그 이하면 패치 버전을 자동 인상해 주입한다.
+# project.yml의 MARKETING_VERSION은 "최소 희망 버전"이다 — 1.1 → 1.2 같은 의미 있는 인상만 손으로 한다.
+#
+# 필요한 리포지토리 시크릿 5개 — 없으면 아카이브 단계부터 실패한다:
+#   ASC_KEY_ID          App Store Connect API 키의 Key ID
+#   ASC_ISSUER_ID       같은 화면의 Issuer ID
+#   ASC_KEY_P8          AuthKey_XXXX.p8 파일 내용 전체 (BEGIN/END 줄 포함)
+#   DIST_CERT_P12_BASE64  Apple Distribution 인증서 .p12를 base64로 인코딩한 문자열
+#   DIST_CERT_PASSWORD    그 .p12를 내보낼 때 건 비밀번호
+name: testflight
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+# 동시에 두 개가 돌면 같은 빌드 번호를 집어 업로드 하나가 거부된다 — 직렬로 돌린다.
+concurrency:
+  group: testflight
+  cancel-in-progress: false
+
+env:
+  BUNDLE_ID: com.nepnep.NepNep
+  TEAM_ID: WDNVP9B8A9
+
+jobs:
+  upload:
+    runs-on: macos-26   # Xcode 26.6 기본 + iPhone 17 Pro 시뮬 포함 (러너 이미지 20260728 기준)
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # 이미지 기본 Xcode를 그대로 쓴다 — 이 이미지에는 Xcode 27 프리뷰도 깔려 있어서
+      # "가장 최신"을 자동으로 고르면 베타로 빌드된다.
+      - name: Xcode 버전 확인
+        run: xcodebuild -version
+
+      - name: xcodegen으로 프로젝트 생성
+        run: |
+          brew install --quiet xcodegen
+          cd ios && xcodegen generate
+
+      # 시뮬레이터 유닛 테스트 — 서명 없이 돌린다(엔진 로직 테스트라 엔타이틀먼트가 필요 없다).
+      - name: 테스트
+        run: |
+          xcodebuild test \
+            -project ios/NepNep.xcodeproj \
+            -scheme NepNep \
+            -destination "platform=iOS Simulator,name=iPhone 17 Pro" \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: App Store Connect API 키 파일 작성
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: |
+          # altool은 이 경로에서 AuthKey_<KeyID>.p8을 찾는다. xcodebuild는 -authenticationKeyPath로 따로 준다.
+          mkdir -p ~/.appstoreconnect/private_keys
+          printf '%s\n' "$ASC_KEY_P8" > ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8
+          chmod 600 ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8
+
+      - name: 빌드 번호·마케팅 버전 결정 (ASC 조회)
+        id: buildnum
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          pip install --quiet "pyjwt[crypto]"
+          python3 - <<'EOF'
+          import json, os, re, time, urllib.request
+          import jwt
+
+          key_id = os.environ["ASC_KEY_ID"]
+          key = open(os.path.expanduser(f"~/.appstoreconnect/private_keys/AuthKey_{key_id}.p8")).read()
+          now = int(time.time())
+          token = jwt.encode(
+              {"iss": os.environ["ASC_ISSUER_ID"], "iat": now, "exp": now + 600, "aud": "appstoreconnect-v1"},
+              key, algorithm="ES256", headers={"kid": key_id, "typ": "JWT"},
+          )
+
+          def get(url):
+              req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+              with urllib.request.urlopen(req) as r:
+                  return json.load(r)
+
+          base = "https://api.appstoreconnect.apple.com/v1"
+          bundle_id = os.environ["BUNDLE_ID"]
+          apps = get(f"{base}/apps?filter[bundleId]={bundle_id}")["data"]
+          if not apps:
+              raise SystemExit(f"App Store Connect에 {bundle_id} 앱이 없다 — API 키 권한이나 번들 ID를 확인할 것")
+
+          # version 필드가 곧 CFBundleVersion(빌드 번호)다. 문자열 정렬은 10 < 9로 뒤집히므로
+          # 최근 업로드 200건을 받아 정수로 최댓값을 구한다.
+          builds = get(f"{base}/builds?filter[app]={apps[0]['id']}&limit=200&sort=-uploadedDate")["data"]
+          nums = [int(b["attributes"]["version"]) for b in builds
+                  if str(b["attributes"].get("version", "")).isdigit()]
+
+          yml = open("ios/project.yml").read()
+          if nums:
+              nxt = max(nums) + 1
+          else:
+              # 아직 업로드된 빌드가 하나도 없을 때만 project.yml 값을 기준으로 삼는다.
+              nxt = int(re.search(r'CURRENT_PROJECT_VERSION:\s*"(\d+)"', yml).group(1)) + 1
+
+          # --- 마케팅 버전(CFBundleShortVersionString) 결정 ---
+          # App Store 심사가 승인된 버전은 pre-release train이 닫혀 재사용할 수 없다(altool 90186/90062).
+          # project.yml의 MARKETING_VERSION이 승인된 최신 버전 이하이면 그 버전의 패치를 +1 해 쓴다.
+          def as_tuple(s):
+              return tuple(int(x) for x in s.split("."))
+
+          def bump_patch(s):
+              parts = [int(x) for x in s.split(".")]
+              if len(parts) < 3:
+                  parts.append(1)   # 1.1 → 1.1.1
+              else:
+                  parts[-1] += 1    # 1.1.1 → 1.1.2
+              return ".".join(str(p) for p in parts)
+
+          # appVersionState 기준 "심사 승인 이후" 상태 + 구식 appStoreState 값 폴백
+          APPROVED = {
+              "ACCEPTED", "PENDING_APPLE_RELEASE", "PENDING_DEVELOPER_RELEASE",
+              "PROCESSING_FOR_DISTRIBUTION", "READY_FOR_DISTRIBUTION", "REPLACED_WITH_NEW_VERSION",
+              "READY_FOR_SALE", "PROCESSING_FOR_APP_STORE", "REMOVED_FROM_SALE",
+              "DEVELOPER_REMOVED_FROM_SALE",
+          }
+          desired = re.search(r'MARKETING_VERSION:\s*"([0-9.]+)"', yml).group(1)
+          versions = get(f"{base}/apps/{apps[0]['id']}/appStoreVersions?limit=200")["data"]
+          closed = [v["attributes"]["versionString"] for v in versions
+                    if (v["attributes"].get("appVersionState") or v["attributes"].get("appStoreState")) in APPROVED]
+
+          if closed and as_tuple(desired) <= max(map(as_tuple, closed)):
+              top = max(closed, key=as_tuple)
+              marketing = bump_patch(top)
+              print(f"마케팅 버전: {marketing} (project.yml {desired} ≤ 승인된 {top} — 트레인 마감으로 자동 인상)")
+          else:
+              marketing = desired
+              print(f"마케팅 버전: {marketing} (project.yml 값 그대로)")
+
+          print(f"이번 빌드 번호: {nxt} (ASC 최신 {max(nums) if nums else '없음'})")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"number={nxt}\n")
+              f.write(f"marketing={marketing}\n")
+          EOF
+
+      - name: 배포 인증서를 임시 키체인에 설치
+        env:
+          CERT_BASE64: ${{ secrets.DIST_CERT_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.DIST_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN_PASSWORD=$(uuidgen)
+          echo "$CERT_BASE64" | base64 --decode > /tmp/dist.p12
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security set-keychain-settings -lut 21600 build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security import /tmp/dist.p12 -k build.keychain -P "$CERT_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+          security list-keychains -d user -s build.keychain login.keychain
+          rm -f /tmp/dist.p12
+
+      - name: 아카이브
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          # -allowProvisioningUpdates: App Store용 프로비저닝 프로파일을 ASC API 키로 내려받거나 만든다
+          # (앱 본체 + NepNepWidgets 익스텐션 둘 다 필요하다 — 스킴이 위젯을 의존성으로 끌고 간다)
+          xcodebuild archive \
+            -project ios/NepNep.xcodeproj \
+            -scheme NepNep \
+            -destination "generic/platform=iOS" \
+            -archivePath build/NepNep.xcarchive \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8 \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            CURRENT_PROJECT_VERSION=${{ steps.buildnum.outputs.number }} \
+            MARKETING_VERSION=${{ steps.buildnum.outputs.marketing }} \
+            DEVELOPMENT_TEAM=$TEAM_ID
+
+      - name: .ipa 내보내기
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          cat > /tmp/ExportOptions.plist <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>teamID</key><string>${TEAM_ID}</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+            <key>destination</key><string>export</string>
+          </dict>
+          </plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath build/NepNep.xcarchive \
+            -exportPath build/ipa \
+            -exportOptionsPlist /tmp/ExportOptions.plist \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8 \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+
+      - name: TestFlight 업로드
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          xcrun altool --upload-app --type ios \
+            --file "$(ls build/ipa/*.ipa | head -1)" \
+            --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
+          echo "버전 ${{ steps.buildnum.outputs.marketing }} 빌드 ${{ steps.buildnum.outputs.number }} 업로드 완료 — ASC 처리(약 5~15분) 후 TestFlight에 뜬다"
