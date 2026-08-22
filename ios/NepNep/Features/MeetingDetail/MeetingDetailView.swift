@@ -39,6 +39,13 @@ struct MeetingDetailView: View {
         .safeAreaInset(edge: .bottom) { bottomBar(meeting) }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
+                ShareSummaryMenu(meeting: meeting) {
+                    Image(systemName: "square.and.arrow.up")
+                }
+                .accessibilityLabel("요약 공유")
+                .tint(DesignTokens.accent)
+            }
+            ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     showSpeakerSheet = true
                 } label: {
