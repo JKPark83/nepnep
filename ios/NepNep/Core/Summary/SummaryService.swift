@@ -75,6 +75,11 @@ struct SummaryService {
                                           due: parsed.due,
                                           orderIndex: i))
         }
+        // 자동 제목이면 요약이 뽑은 주제로 교체 — 사용자가 바꾼 제목은 건드리지 않는다
+        if Meeting.isAutoTitle(meeting.title, date: meeting.createdAt),
+           let generated = Meeting.summaryTitle(topic: final.title, date: meeting.createdAt) {
+            meeting.title = generated
+        }
         meeting.type = type
         meeting.summaryUnavailable = false
         try? context.save()
