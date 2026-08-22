@@ -112,6 +112,26 @@ struct ExportSheet: View {
                     }
                 }
 
+                // 계정 연동 없이 바로 꺼낼 수 있는 경로 (#4)
+                Section {
+                    ShareSummaryMenu(meeting: meeting) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.title3)
+                                .foregroundStyle(DesignTokens.accent)
+                                .frame(width: 30)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("공유하기")
+                                    .foregroundStyle(DesignTokens.textPrimary)
+                                Text("카카오톡·메일·Markdown·PDF — 연동 없이 바로")
+                                    .font(.caption)
+                                    .foregroundStyle(DesignTokens.textSecondary)
+                            }
+                            Spacer()
+                        }
+                    }
+                }
+
                 Section {
                     Toggle(isOn: $autoExport) {
                         VStack(alignment: .leading, spacing: 3) {
