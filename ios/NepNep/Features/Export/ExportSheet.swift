@@ -82,7 +82,8 @@ struct ExportSheet: View {
                                   selected: selectedTarget == .notion)
                     }
                     if selectedTarget == .notion, auth.isConnected {
-                        destinationRow(name: service.lastDatabaseName) {
+                        destinationRow(name: service.lastDatabaseName,
+                                       placeholder: "선택 안 됨") {
                             showTargetPicker = true
                         }
                     }
@@ -102,7 +103,9 @@ struct ExportSheet: View {
                                   selected: selectedTarget == .google)
                     }
                     if selectedTarget == .google, googleAuth.isConnected {
-                        destinationRow(name: service.lastFolderName) {
+                        // 폴더 미선택은 정상 상태 — 내 드라이브 최상위에 만든다
+                        destinationRow(name: service.lastFolderName,
+                                       placeholder: "내 드라이브 (기본)") {
                             showFolderPicker = true
                         }
                     }
@@ -165,11 +168,10 @@ struct ExportSheet: View {
     }
 
     private var canExport: Bool {
-        switch selectedTarget {
-        case .notion: return auth.isConnected && service.lastDatabaseID != nil
-        case .google: return googleAuth.isConnected && service.lastFolderID != nil
-        case nil: return false
-        }
+        ExportGate.canExport(target: selectedTarget,
+                             notionConnected: auth.isConnected,
+                             googleConnected: googleAuth.isConnected,
+                             databaseID: service.lastDatabaseID)
     }
 
     private func startExport() {
@@ -181,11 +183,8 @@ struct ExportSheet: View {
             }
             service.export(meeting: meeting, databaseID: databaseID)
         case .google:
-            guard let folderID = service.lastFolderID else {
-                showFolderPicker = true
-                return
-            }
-            service.exportGoogle(meeting: meeting, folderID: folderID)
+            // 폴더를 안 고른 채로도 진행한다 — 내 드라이브 최상위에 만들어진다
+            service.exportGoogle(meeting: meeting, folderID: service.lastFolderID)
         case nil:
             break
         }
@@ -330,13 +329,14 @@ struct ExportSheet: View {
         }
     }
 
-    private func destinationRow(name: String?, action: @escaping () -> Void) -> some View {
+    private func destinationRow(name: String?, placeholder: String,
+                                action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack {
                 Text("대상")
                     .foregroundStyle(DesignTokens.textPrimary)
                 Spacer()
-                Text(name ?? "선택 안 됨")
+                Text(name ?? placeholder)
                     .foregroundStyle(DesignTokens.textSecondary)
                 Image(systemName: "chevron.right")
                     .font(.caption)
