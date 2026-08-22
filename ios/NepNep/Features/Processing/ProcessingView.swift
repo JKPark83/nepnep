@@ -44,6 +44,7 @@ struct ProcessingView: View {
                 .padding(.horizontal, DesignTokens.margin)
                 .padding(.bottom, 24)
         }
+        .contentWidthLimited()
         .frame(maxWidth: .infinity)
         .background(DesignTokens.background)
     }

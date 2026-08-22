@@ -40,6 +40,7 @@ struct OnboardingView: View {
             case .permission: permissionStep
             }
         }
+        .contentWidthLimited()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(DesignTokens.background)
     }

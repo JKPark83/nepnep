@@ -3,9 +3,16 @@ import SwiftUI
 
 /// 홈 (와이어프레임 1b 확정본)
 struct HomeView: View {
+    /// 2단 레이아웃의 사이드바로 쓰일 때만 true — 상세 칼럼이 보고 있는 회의를 표시한다.
+    /// 사이드바 칼럼 안에서는 폭이 좁아 horizontalSizeClass가 compact로 내려오므로
+    /// 사이즈 클래스로는 2단인지 알 수 없다. 레이아웃을 아는 쪽에서 내려준다.
+    var showsSelection = false
+
     @Environment(\.modelContext) private var context
     @Query(sort: \Meeting.createdAt, order: .reverse) private var allMeetings: [Meeting]
     @State private var store = MeetingStore()
+    /// 아이패드 2단에서 상세 칼럼이 무엇을 보여주는지 알아야 선택 표시를 그릴 수 있다
+    @State private var router = Router.shared
     @State private var recordingLaunch: RecordingLaunch?
     @State private var processingTarget: Meeting?
     @State private var renameTarget: Meeting?
@@ -89,6 +96,12 @@ struct HomeView: View {
                 }
                 .contentShape(Rectangle())
                 .onTapGesture { open(meeting) }
+                .overlay {
+                    if isSelected(meeting) {
+                        RoundedRectangle(cornerRadius: DesignTokens.cardRadius)
+                            .strokeBorder(DesignTokens.accent, lineWidth: 2)
+                    }
+                }
                 .listRowStyle()
                 .swipeActions(edge: .trailing) {
                     Button("삭제", role: .destructive) {
@@ -107,6 +120,11 @@ struct HomeView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+    }
+
+    /// 아이패드 2단에서만 표시한다 — 아이폰은 상세로 밀고 들어가니 선택 개념이 없다
+    private func isSelected(_ meeting: Meeting) -> Bool {
+        showsSelection && router.path.last == meeting.id
     }
 
     private func open(_ meeting: Meeting) {
