@@ -32,6 +32,35 @@ enum DesignTokens {
     static let cardRadius: CGFloat = 16
     static let buttonHeight: CGFloat = 52
     static let fabSize: CGFloat = 68
+
+    /// 넓은 화면에서 콘텐츠를 묶어 두는 최대 폭.
+    /// 아이패드 전폭(최대 1366pt)으로 늘어나면 버튼 하나가 화면을 가로지르고
+    /// 본문 한 줄이 너무 길어져 읽기 어렵다.
+    static let contentMaxWidth: CGFloat = 600
+}
+
+extension View {
+    /// regular 폭(아이패드, 넓은 Stage Manager 창)에서만 콘텐츠를 가운데로 모은다.
+    /// compact(아이폰, 좁은 창)에서는 아무것도 하지 않으므로 기존 레이아웃 그대로다.
+    func contentWidthLimited(_ limit: CGFloat = DesignTokens.contentMaxWidth) -> some View {
+        modifier(ContentWidthLimit(limit: limit))
+    }
+}
+
+private struct ContentWidthLimit: ViewModifier {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    let limit: CGFloat
+
+    func body(content: Content) -> some View {
+        if horizontalSizeClass == .regular {
+            // 안쪽 frame이 폭을 묶고, 바깥 frame이 남은 자리에서 가운데로 민다
+            content
+                .frame(maxWidth: limit)
+                .frame(maxWidth: .infinity)
+        } else {
+            content
+        }
+    }
 }
 
 private extension Color {
