@@ -37,6 +37,9 @@ targets:
       properties:
         CFBundleDisplayName: 넵넵
         UILaunchStoryboardName: LaunchScreen
+        # HTTPS 외에 자체 암호화를 쓰지 않는다 — 업로드마다 ASC에서 수출 규정을
+        # 손으로 답하지 않도록 미리 박아 둔다.
+        ITSAppUsesNonExemptEncryption: false
         NSMicrophoneUsageDescription: 회의 음성을 녹음해 기기 안에서 회의록으로 정리합니다.
         NSSpeechRecognitionUsageDescription: 녹음한 회의 음성을 기기 안에서 글로 옮겨 회의록을 만듭니다.
         NSSupportsLiveActivities: true

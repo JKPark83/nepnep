@@ -12,7 +12,7 @@ final class GoogleAuthService: NSObject {
     static let shared = GoogleAuthService()
 
     /// Google Cloud Console의 iOS OAuth 클라이언트 ID (예: "1234-abc.apps.googleusercontent.com")
-    static let clientID = "GOOGLE_CLIENT_ID_MISSING"
+    static let clientID = "223884355131-tan8q317404etpr6005lmbpeh979j788.apps.googleusercontent.com"
     /// iOS 클라이언트의 리다이렉트는 클라이언트 ID를 뒤집은 커스텀 스킴
     static var callbackScheme: String {
         clientID.components(separatedBy: ".").reversed().joined(separator: ".")
