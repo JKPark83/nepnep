@@ -29,6 +29,11 @@ struct MeetingCardView: View {
                 Button("다시 정리하기", action: onRetry)
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(DesignTokens.accent)
+            case .pendingTransfer:
+                Text("애플워치에서 녹음했어요. 아이폰이 가까워지면 자동으로 넘어와요.")
+                    .font(.footnote)
+                    .foregroundStyle(DesignTokens.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             case .recording, .recorded:
                 EmptyView()
             }
@@ -50,6 +55,8 @@ struct MeetingCardView: View {
             badge(text: "완료", color: DesignTokens.accent)
         case .failed:
             badge(text: "실패", color: DesignTokens.statusFailed)
+        case .pendingTransfer:
+            badge(text: "전송 대기 중", color: DesignTokens.statusProcessing)
         case .recorded, .recording:
             badge(text: "녹음됨", color: DesignTokens.textSecondary)
         }

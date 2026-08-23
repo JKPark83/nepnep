@@ -19,6 +19,7 @@ build/
 ios/NepNep.xcodeproj/
 ios/NepNep/Info.plist
 ios/NepNepWidgets/Info.plist
+ios/NepNepWatch/Info.plist
 
 # 구글 OAuth 클라이언트 plist — 앱은 GoogleAuthService의 하드코딩 clientID를 쓰므로
 # 이 파일은 번들에 필요 없다. 콘솔에서 받은 사본이 루트에 남아도 커밋되지 않게 막는다.
