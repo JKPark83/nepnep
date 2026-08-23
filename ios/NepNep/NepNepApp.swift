@@ -16,6 +16,9 @@ struct NepNepApp: App {
         ProcessingCoordinator.shared.modelContext = container.mainContext
         // BG 태스크 등록은 런치 완료 전에 1회 (03-m2 §4)
         ProcessingCoordinator.shared.register()
+        // 워치가 파일을 보내면 앱이 UI 없이 깨어난다 — 그전에 델리게이트가 붙어 있어야 한다 (이슈 #15)
+        PhoneWatchSession.shared.modelContext = container.mainContext
+        PhoneWatchSession.shared.activate()
         // 알림 탭 → 상세 딥링크 (04-m2 §5)
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
         #if DEBUG
