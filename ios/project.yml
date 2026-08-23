@@ -121,9 +121,12 @@ targets:
         WKCompanionAppBundleIdentifier: com.nepnep.NepNep
         # 권한 프롬프트는 워치에서 뜬다 — 아이폰 쪽 문구와 별개로 필요하다.
         NSMicrophoneUsageDescription: 회의 음성을 녹음해 아이폰으로 보내 회의록으로 정리합니다.
-        # 손목을 내려 화면이 꺼져도 녹음이 이어지게 한다. watchOS는 iOS보다 훨씬
-        # 공격적으로 앱을 정지시키므로 이것만으로 충분하다고 볼 수 없다 — 실기기 검증 필요.
-        WKBackgroundModes: [audio]
+        # 손목을 내려 화면이 꺼져도 녹음이 이어지게 한다.
+        # WKBackgroundModes는 workout-processing 계열만 받아 audio를 넣으면 업로드가
+        # 거부된다(altool 90362) — watchOS에서 백그라운드 오디오는 이 키를 쓴다.
+        # 다만 문서상 재생·햅틱용이라 녹음 유지까지 보장하지는 않는다. 손목을 내려도
+        # 녹음이 이어지는지는 실기기 검증이 필요하고, 안 되면 WKExtendedRuntimeSession으로 가야 한다.
+        UIBackgroundModes: [audio]
     settings:
       base:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
