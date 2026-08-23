@@ -3,6 +3,7 @@ options:
   bundleIdPrefix: com.nepnep
   deploymentTarget:
     iOS: "26.0"
+    watchOS: "26.0"
 packages:
   FluidAudio:
     url: https://github.com/FluidInference/FluidAudio.git
@@ -26,8 +27,12 @@ targets:
     sources:
       - NepNep
       - Shared
+      - SharedWatch
     dependencies:
       - target: NepNepWidgets
+      # 워치 앱은 본체 번들의 Watch/ 안으로 임베드된다 — 이게 "앱을 설치하면
+      # 워치 앱도 설치할 수 있다"를 만족시키는 지점이다. 별도 App Store 등재가 아니다.
+      - target: NepNepWatch
       - package: FluidAudio
     settings:
       base:
@@ -97,6 +102,37 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.nepnep.NepNep.widgets
         # 확장의 기기 패밀리가 본체와 다르면 번들 검증에서 걸린다.
         TARGETED_DEVICE_FAMILY: "1,2"
+  NepNepWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - NepNepWatch
+      - SharedWatch
+    info:
+      path: NepNepWatch/Info.plist
+      properties:
+        CFBundleDisplayName: 넵넵
+        # 본체·위젯과 정확히 같은 값이어야 업로드가 통과한다 — 리터럴로 두면
+        # 본체만 CI 주입값으로 올라가 번들 불일치로 거부된다(위젯과 같은 함정).
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # watchOS 7+ 단일 타깃 워치 앱 — 짝이 되는 아이폰 앱을 여기서 가리킨다.
+        WKApplication: true
+        WKCompanionAppBundleIdentifier: com.nepnep.NepNep
+        # 권한 프롬프트는 워치에서 뜬다 — 아이폰 쪽 문구와 별개로 필요하다.
+        NSMicrophoneUsageDescription: 회의 음성을 녹음해 아이폰으로 보내 회의록으로 정리합니다.
+        # 손목을 내려 화면이 꺼져도 녹음이 이어지게 한다. watchOS는 iOS보다 훨씬
+        # 공격적으로 앱을 정지시키므로 이것만으로 충분하다고 볼 수 없다 — 실기기 검증 필요.
+        WKBackgroundModes: [audio]
+    settings:
+      base:
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        PRODUCT_BUNDLE_IDENTIFIER: com.nepnep.NepNep.watchkitapp
+        # 4 = Apple Watch. 프로젝트 기본값 "1,2"(아이폰·아이패드)를 반드시 덮어써야 한다.
+        TARGETED_DEVICE_FAMILY: "4"
+        # 본체에 임베드돼 나가므로 독립 설치 대상이 아니다.
+        SKIP_INSTALL: YES
+
   NepNepTests:
     type: bundle.unit-test
     platform: iOS
@@ -116,3 +152,11 @@ schemes:
     test:
       config: Debug
       targets: [NepNepTests]
+  # 워치 앱만 따로 시뮬레이터에 올려 보기 위한 스킴 — 본체 스킴은 임베드 의존성으로
+  # 워치 타깃을 이미 끌고 간다.
+  NepNepWatch:
+    build:
+      targets:
+        NepNepWatch: all
+    run:
+      config: Debug

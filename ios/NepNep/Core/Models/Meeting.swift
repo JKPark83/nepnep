@@ -25,15 +25,23 @@ enum MeetingType: String, CaseIterable, Codable {
 enum MeetingStatus: String, Codable {
     case recording
     case recorded      // 녹음 종료·복구됨, 파이프라인 미시작 (M2 전 임시 종착 상태)
+    /// 워치에서 녹음은 끝났지만 오디오가 아직 아이폰에 도착하지 않음.
+    /// 자리표시자로 목록에 먼저 나타나고, 파일이 오면 processing으로 넘어간다.
+    case pendingTransfer
     case processing
     case done
     case failed
-}
 
-/// 인터럽트 등으로 녹음이 비어 있는 구간
-struct GapRange: Codable, Equatable {
-    var start: TimeInterval
-    var end: TimeInterval
+    /// 워치 목록에 내려보낼 표시 문자열 (홈 카드 배지와 같은 문구)
+    var watchDisplayText: String {
+        switch self {
+        case .processing: return "처리 중"
+        case .done: return "완료"
+        case .failed: return "실패"
+        case .pendingTransfer: return "전송 대기 중"
+        case .recorded, .recording: return "녹음됨"
+        }
+    }
 }
 
 @Model

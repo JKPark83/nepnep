@@ -151,6 +151,9 @@ struct HomeView: View {
             processingTarget = meeting
         case .recording:
             break
+        case .pendingTransfer:
+            // 오디오가 아직 도착하지 않아 열어 볼 것이 없다. 카드 본문이 이유를 설명한다.
+            break
         }
     }
 

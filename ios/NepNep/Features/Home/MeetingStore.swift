@@ -22,6 +22,7 @@ final class MeetingStore {
         AudioFileStore.removeDirectory(for: meeting.id)
         context.delete(meeting)   // Speaker·Utterance·Summary는 cascade
         try? context.save()
+        PhoneWatchSession.shared.pushContext()   // 워치 목록에 지운 회의가 남지 않게 (이슈 #15 §5)
     }
 }
 

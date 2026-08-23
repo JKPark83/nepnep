@@ -143,6 +143,7 @@ final class ProcessingCoordinator {
             meeting.processingProgress = 1
             try? context.save()
             NotificationService.notifyDone(meeting: meeting)
+            PhoneWatchSession.shared.pushContext()   // 워치 목록에도 결과 반영 (이슈 #15 §5)
             autoExportIfEnabled(meeting: meeting)
         } catch {
             fail(meeting, reason: .engineError)
@@ -241,6 +242,7 @@ final class ProcessingCoordinator {
         meeting.processingStage = nil
         try? modelContext?.save()
         NotificationService.notifyFailed(meeting: meeting)
+        PhoneWatchSession.shared.pushContext()   // 워치 목록에도 실패 반영 (이슈 #15 §5)
     }
 
     private func fetchMeeting(id: UUID, context: ModelContext) -> Meeting? {
