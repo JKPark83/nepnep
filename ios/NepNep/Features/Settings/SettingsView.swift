@@ -60,6 +60,8 @@ struct SettingsView: View {
                     .disabled(!auth.isConnected && !googleAuth.isConnected)
                 }
 
+                EngineSection()
+
                 GlossarySection()
 
                 StorageSection()

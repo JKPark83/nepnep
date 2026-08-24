@@ -16,6 +16,8 @@ final class ProcessingCoordinator {
     private var expired = false
     /// 시스템이 승인해 준 백그라운드 연장 태스크 (없어도 실행은 진행)
     private var currentBGTask: BGContinuedProcessingTask?
+    /// 지금 도는 엔진이 전사 진행률을 실제로 알려 주는가 (원격은 못 알려 준다)
+    private var engineReportsProgress = true
     /// 포그라운드 실행이 끝날 때까지 BG 태스크 핸들러를 붙잡아 두는 continuation
     private var bgTaskWaiter: CheckedContinuation<Void, Never>?
 
@@ -121,11 +123,18 @@ final class ProcessingCoordinator {
             return
         }
 
-        let engine = SpeechTranscriberEngine()
+        // 설정에서 고른 엔진 (#21 후속)
+        let engine = await EngineCatalog.shared.makeEngine().engine
+        engineReportsProgress = engine.reportsProgress
+        // 서버가 화자분리까지 해 주면 그 결과를 쓴다 — 같은 파일을 두 번 올리지 않는다
+        var diarizer: any DiarizationProviding = DiarizationService()
+        if let remote = engine as? RemoteTranscriptionEngine, remote.descriptor.diarizes {
+            diarizer = remote
+        }
 
         let runner = PipelineRunner(
             engine: engine,
-            diarizer: DiarizationService(),
+            diarizer: diarizer,
             checkpoint: ProcessingCheckpoint(meetingID: meetingID))
 
         do {
@@ -218,7 +227,11 @@ final class ProcessingCoordinator {
         // 전체 진행률 배분: 전사 0~0.55, 화자분리 0.55~0.75, 병합 0.75~0.8, 요약 0.8~1
         switch stage {
         case .transcribing(let p):
-            meeting.processingStage = "받아쓰는 중"
+            // 원격 엔진은 다 올린 뒤부터 서버가 도는 동안을 알 길이 없다. 막대가
+            // 멈춘 것처럼 보이므로 글로라도 지금 뭘 기다리는지 말해 준다.
+            meeting.processingStage = engineReportsProgress
+                ? "받아쓰는 중"
+                : (p < 1 ? "올리는 중" : "서버에서 받아쓰는 중")
             meeting.processingProgress = p * 0.55
         case .diarizing:
             meeting.processingStage = "화자를 나누는 중"

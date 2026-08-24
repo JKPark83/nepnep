@@ -88,8 +88,11 @@ struct RetranscribeLabView: View {
             Text("재전사할 회의")
         } footer: {
             if lab.isRunning {
-                Text(lab.progressText)
-                    .foregroundStyle(DesignTokens.accent)
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.mini)
+                    Text(lab.progressText)
+                        .foregroundStyle(DesignTokens.accent)
+                }
             } else {
                 Text("녹음 길이만큼 걸립니다. 결과는 화면에만 보여주고 회의에는 반영하지 않습니다.")
             }
@@ -100,6 +103,7 @@ struct RetranscribeLabView: View {
 
     private func statsSection(_ pass: TranscriptionPass) -> some View {
         Section {
+            row("전사한 곳", lab.engineName, tint: DesignTokens.textPrimary)
             row("단어 수", "\(pass.wordCount)")
             row("평균 신뢰도", pct(pass.averageConfidence))
             row("최저 신뢰도", pct(pass.minimumConfidence))
@@ -160,6 +164,8 @@ final class RetranscribeLab {
     private(set) var progressText = ""
     private(set) var title = ""
     private(set) var preferredFormat = "확인 중…"
+    /// 이번 판을 실제로 무엇이 돌렸는지 — 서버로 갔는지 기기 안으로 떨어졌는지
+    private(set) var engineName = ""
 
     func loadFormat() async {
         guard let format = await SpeechTranscriberEngine.preferredAudioFormat() else {
@@ -175,44 +181,65 @@ final class RetranscribeLab {
         self.title = title
         pass = nil
         errorText = nil
+        engineName = ""
         isRunning = true
-        progressText = "오디오 되돌리는 중…"
+        progressText = "엔진 확인 중…"
 
         Task {
             defer { isRunning = false }
             do {
-                let caf = try decodeToTemporaryCAF(meetingID: meetingID)
-                defer { try? FileManager.default.removeItem(at: caf) }
+                // 설정에서 고른 엔진으로 돌린다 — 실험실이 기기 안 전사만 쓰면
+                // 서버를 붙여 놓고도 결과를 비교할 수가 없다.
+                let choice = await EngineCatalog.shared.makeEngine()
+                engineName = EngineCatalog.shared.selected.name
+                    + (choice.usedFallback ? " → 기기 안 (서버에 못 붙음)" : "")
 
-                pass = TranscriptionPass(words: try await transcribe(caf))
+                let input = try prepareInput(meetingID: meetingID, engine: choice.engine)
+                defer { if input.isTemporary { try? FileManager.default.removeItem(at: input.url) } }
+
+                let reportsProgress = choice.engine.reportsProgress
+                progressText = reportsProgress ? "전사 중… 0%" : "올리는 중… 0%"
+                let words = try await choice.engine.transcribe(url: input.url) { fraction in
+                    Task { @MainActor [weak self] in
+                        self?.progressText = Self.progressLabel(fraction,
+                                                                reportsProgress: reportsProgress)
+                    }
+                }
+                pass = TranscriptionPass(words: words)
                 progressText = ""
             } catch {
-                errorText = error.localizedDescription
+                let code = (error as NSError).code
+                errorText = error.localizedDescription + " (\(code))"
                 progressText = ""
             }
         }
     }
 
-    private func decodeToTemporaryCAF(meetingID: UUID) throws -> URL {
+    /// 원격 엔진은 다 올린 뒤부터 서버가 도는 동안을 알 길이 없다.
+    /// 절반에서 멈춘 퍼센트를 보여주느니 그때부터는 숫자를 걷는다.
+    static func progressLabel(_ fraction: Double, reportsProgress: Bool) -> String {
+        if reportsProgress { return "전사 중… \(Int(fraction * 100))%" }
+        return fraction < 1 ? "올리는 중… \(Int(fraction * 100))%" : "서버에서 전사 중…"
+    }
+
+    /// 기기 안 전사기는 파이프라인 포맷(CAF)을 받으므로 m4a를 되돌려 준다.
+    /// 원격 엔진은 어차피 m4a로 압축해 올리므로 원본을 그대로 넘긴다 —
+    /// 굳이 되돌렸다가 다시 압축하면 AAC를 두 번 먹여 비교가 불공정해진다.
+    private func prepareInput(meetingID: UUID,
+                              engine: any TranscriptionEngine) throws -> (url: URL, isTemporary: Bool) {
         let m4a = AudioFileStore.m4aURL(meetingID: meetingID)
         guard FileManager.default.fileExists(atPath: m4a.path) else {
             throw NSError(domain: "RetranscribeLab", code: 1, userInfo: [
                 NSLocalizedDescriptionKey: "이 회의의 오디오 파일이 없습니다.",
             ])
         }
+        if engine is RemoteTranscriptionEngine { return (m4a, false) }
+
+        progressText = "오디오 되돌리는 중…"
         let caf = FileManager.default.temporaryDirectory
             .appendingPathComponent("retranscribe-\(meetingID.uuidString).caf")
         try AudioTranscoder.decodeToPipelineCAF(source: m4a, to: caf)
-        return caf
-    }
-
-    private func transcribe(_ url: URL) async throws -> [TranscriptWord] {
-        progressText = "전사 중… 0%"
-        return try await SpeechTranscriberEngine().transcribe(url: url) { fraction in
-            Task { @MainActor [weak self] in
-                self?.progressText = "전사 중… \(Int(fraction * 100))%"
-            }
-        }
+        return (caf, true)
     }
 }
 
