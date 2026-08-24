@@ -10,7 +10,6 @@ struct SettingsView: View {
     @State private var showDisconnectConfirm = false
     @State private var showGoogleDisconnectConfirm = false
     @AppStorage(ExportService.autoExportKey) private var autoExport = false
-    @AppStorage(MeetingType.defaultKey) private var defaultTypeRaw = MeetingType.general.rawValue
     @AppStorage(NotificationService.doneNotificationKey) private var doneNotification = true
 
     var body: some View {
@@ -103,21 +102,20 @@ struct SettingsView: View {
 
     private var defaultsSection: some View {
         Section("기본값") {
-            Picker(selection: $defaultTypeRaw) {
-                ForEach(MeetingType.allCases, id: \.rawValue) { type in
-                    Text(type.displayName).tag(type.rawValue)
-                }
-            } label: {
-                Text("기본 회의 유형")
-                    .foregroundStyle(DesignTokens.textPrimary)
-            }
-            .tint(DesignTokens.textSecondary)
-
+            // 회의 유형이 일반 하나로 정리돼 기본 유형 선택은 걷어냈다 (#21)
             Toggle(isOn: $doneNotification) {
                 Text("처리 완료 알림")
                     .foregroundStyle(DesignTokens.textPrimary)
             }
             .tint(DesignTokens.accent)
+
+            // 요약이 실패했을 때 원인을 확인할 수 있는 통로 (#21)
+            NavigationLink {
+                SummaryDiagnosticsView()
+            } label: {
+                Text("요약 진단")
+                    .foregroundStyle(DesignTokens.textPrimary)
+            }
 
             // 같은 오디오로 어휘 유무를 비교하는 자리 (#21 후속)
             NavigationLink {

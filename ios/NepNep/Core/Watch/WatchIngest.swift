@@ -57,7 +57,7 @@ enum WatchIngest {
         // 어차피 요약이 끝나면 `Meeting.summaryTitle`로 다시 바뀐다.
         let type = MeetingType(rawValue: envelope.typeRaw) ?? .general
         let meeting = Meeting(id: id,
-                              title: Meeting.autoTitle(type: type, date: envelope.startedAt),
+                              title: Meeting.autoTitle(date: envelope.startedAt),
                               type: type,
                               createdAt: envelope.startedAt)
         meeting.duration = envelope.duration

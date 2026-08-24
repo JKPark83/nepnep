@@ -196,18 +196,19 @@ final class ProcessingCoordinator {
                                      context: ModelContext) async {
         guard SummaryService.isAvailable else {
             meeting.summaryUnavailable = true
+            meeting.summaryFailureReason = nil   // 기기 미지원은 실패가 아니라 비가용
             return
         }
         updateProgress(meeting: meeting, stage: .summarizing(0))
         do {
             try await SummaryService.generate(meeting: meeting,
-                                              type: meeting.type,
                                               context: context) { p in
                 Task { @MainActor in
                     self.updateProgress(meeting: meeting, stage: .summarizing(p))
                 }
             }
         } catch {
+            // 사유는 generate가 meeting.summaryFailureReason에 남긴다 (#21)
             meeting.summaryUnavailable = true
         }
     }
