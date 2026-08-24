@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var showGoogleDisconnectConfirm = false
     @AppStorage(ExportService.autoExportKey) private var autoExport = false
     @AppStorage(NotificationService.doneNotificationKey) private var doneNotification = true
+    @AppStorage(LiveTranscriber.Setting.storageKey) private var liveCaption = true
 
     var body: some View {
         NavigationStack {
@@ -105,6 +106,13 @@ struct SettingsView: View {
             // 회의 유형이 일반 하나로 정리돼 기본 유형 선택은 걷어냈다 (#21)
             Toggle(isOn: $doneNotification) {
                 Text("처리 완료 알림")
+                    .foregroundStyle(DesignTokens.textPrimary)
+            }
+            .tint(DesignTokens.accent)
+
+            // 녹음 중 자막은 배터리를 더 쓴다 (D6). 기본은 켜 두고 끌 수 있게 했다.
+            Toggle(isOn: $liveCaption) {
+                Text("녹음 중 자막")
                     .foregroundStyle(DesignTokens.textPrimary)
             }
             .tint(DesignTokens.accent)

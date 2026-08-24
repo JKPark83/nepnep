@@ -9,7 +9,6 @@ struct RecordingView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var session = RecordingSession.shared
-    @State private var meetingType: MeetingType = .general
     @State private var isEditingTitle = false
     @State private var editedTitle = ""
     @State private var finishedMeeting: Meeting?
@@ -19,8 +18,6 @@ struct RecordingView: View {
             header
             Spacer()
             titleSection
-            typeSegment
-                .padding(.top, 16)
             elapsedTimer
                 .padding(.top, 40)
             LevelMeterView(levelDB: session.levelDB)
@@ -28,6 +25,7 @@ struct RecordingView: View {
                 .padding(.horizontal, DesignTokens.margin)
                 .padding(.top, 24)
             silenceHint
+            liveCaption
             Spacer()
             controls
                 .padding(.vertical, 32)
@@ -37,7 +35,6 @@ struct RecordingView: View {
         .background(DesignTokens.background)
         .task {
             if session.state == .idle {
-                meetingType = initialType
                 await session.start(type: initialType)
             }
         }
@@ -97,7 +94,7 @@ struct RecordingView: View {
 
     private var titleSection: some View {
         HStack(spacing: 8) {
-            Text(session.currentMeeting?.title ?? Meeting.autoTitle(type: meetingType))
+            Text(session.currentMeeting?.title ?? Meeting.autoTitle())
                 .font(.title2.bold())
                 .foregroundStyle(DesignTokens.textPrimary)
                 .lineLimit(1)
@@ -121,32 +118,47 @@ struct RecordingView: View {
         }
     }
 
-    private var typeSegment: some View {
-        Picker("회의 유형", selection: $meetingType) {
-            ForEach(MeetingType.allCases, id: \.self) { type in
-                Text(type.displayName).tag(type)
-            }
-        }
-        .pickerStyle(.segmented)
-        .padding(.horizontal, DesignTokens.margin)
-        .onChange(of: meetingType) { _, newType in
-            // 유형 변경 즉시 반영 (F1-7). 자동 제목이면 제목도 갱신.
-            guard let meeting = session.currentMeeting else { return }
-            let wasAuto = meeting.title == Meeting.autoTitle(type: meeting.type,
-                                                            date: meeting.createdAt)
-            meeting.type = newType
-            if wasAuto {
-                meeting.title = Meeting.autoTitle(type: newType, date: meeting.createdAt)
-            }
-        }
-    }
-
     private var elapsedTimer: some View {
         Text(Duration.seconds(session.elapsed),
              format: .time(pattern: .minuteSecond))
             .font(.system(size: 64, weight: .medium, design: .monospaced))
             .foregroundStyle(DesignTokens.textPrimary)
             .contentTransition(.numericText())
+    }
+
+    /// 녹음 중 라이브 자막 (PRD F2-4 예외).
+    ///
+    /// 미리보기일 뿐이라 정지하면 버린다 — 저장되는 전사는 지금까지처럼 종료 후
+    /// 일괄 파이프라인이 만든다. 자막이 꺼져 있거나 언어 에셋이 없으면 영역 자체가
+    /// 안 뜬다. 안 되는 이유를 알럿으로 알리지는 않는다.
+    @ViewBuilder
+    private var liveCaption: some View {
+        if session.isLiveTranscribing {
+            Group {
+                if session.liveText.isEmpty {
+                    Text("말을 시작하면 여기에 자막이 보여요")
+                        .font(.footnote)
+                        .foregroundStyle(DesignTokens.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    ScrollView {
+                        // 확정 전 꼬리는 흐리게 — 아직 바뀔 수 있다는 표시다
+                        (Text(session.liveText.finalized)
+                         + Text(session.liveText.pending)
+                            .foregroundStyle(DesignTokens.textSecondary))
+                            .font(.callout)
+                            .foregroundStyle(DesignTokens.textPrimary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    // 새 텍스트가 붙으면 바닥에 붙어 따라 내려간다
+                    .defaultScrollAnchor(.bottom)
+                    .scrollIndicators(.hidden)
+                }
+            }
+            .frame(height: 132, alignment: .topLeading)
+            .padding(.horizontal, DesignTokens.margin)
+            .padding(.top, 20)
+        }
     }
 
     @ViewBuilder
