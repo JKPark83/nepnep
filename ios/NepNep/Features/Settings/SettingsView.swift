@@ -60,6 +60,8 @@ struct SettingsView: View {
                     .disabled(!auth.isConnected && !googleAuth.isConnected)
                 }
 
+                GlossarySection()
+
                 StorageSection()
 
                 defaultsSection
@@ -116,6 +118,14 @@ struct SettingsView: View {
                     .foregroundStyle(DesignTokens.textPrimary)
             }
             .tint(DesignTokens.accent)
+
+            // 같은 오디오로 어휘 유무를 비교하는 자리 (#21 후속)
+            NavigationLink {
+                RetranscribeLabView()
+            } label: {
+                Text("전사 실험실")
+                    .foregroundStyle(DesignTokens.textPrimary)
+            }
 
             Link(destination: AppReviewSupport.privacyPolicyURL) {
                 HStack {
