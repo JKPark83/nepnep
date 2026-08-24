@@ -1,25 +1,16 @@
 import Foundation
 import SwiftData
 
+/// 회의 유형 — 일반 회의 하나만 남겼다 (#21).
+/// 유형별 프롬프트를 4종 유지하면 손볼 때마다 비용이 4배가 되는데, 정작 일반 회의
+/// 품질부터 부족해서 general 하나에 집중하기로 했다. 저장돼 있던 oneOnOne 등
+/// legacy rawValue는 `Meeting.type`의 `?? .general` 폴백이 흡수한다.
 enum MeetingType: String, CaseIterable, Codable {
-    case general, oneOnOne, interview, standup
+    case general
 
-    var displayName: String {
-        switch self {
-        case .general: return "일반"
-        case .oneOnOne: return "1on1"
-        case .interview: return "인터뷰"
-        case .standup: return "스탠드업"
-        }
-    }
+    var displayName: String { "일반" }
 
-    /// 설정 > 기본 회의 유형 (08-m5 §5)
-    static let defaultKey = "defaultMeetingType"
-
-    static var defaultType: MeetingType {
-        guard let raw = UserDefaults.standard.string(forKey: defaultKey) else { return .general }
-        return MeetingType(rawValue: raw) ?? .general
-    }
+    static var defaultType: MeetingType { .general }
 }
 
 enum MeetingStatus: String, Codable {
@@ -63,6 +54,9 @@ final class Meeting {
     var failureReasonRaw: String?
     /// Foundation Models 비가용으로 요약을 건너뜀 (05-m3 §4) — 처리 전체는 성공 처리
     var summaryUnavailable: Bool = false
+    /// 요약 실패 사유 한 줄 — 요약 카드에 그대로 보여준다 (#21).
+    /// 실패 원인이 무엇이든 같은 문구만 나오던 문제를 없애기 위한 값.
+    var summaryFailureReason: String?
     @Relationship(deleteRule: .cascade) var speakers: [Speaker]
     @Relationship(deleteRule: .cascade) var utterances: [Utterance]
     @Relationship(deleteRule: .cascade) var summary: Summary?
@@ -86,6 +80,7 @@ final class Meeting {
         self.gapRanges = []
         self.failureReasonRaw = nil
         self.summaryUnavailable = false
+        self.summaryFailureReason = nil
         self.speakers = []
         self.utterances = []
         self.summary = nil
@@ -101,12 +96,17 @@ final class Meeting {
         set { statusRaw = newValue.rawValue }
     }
 
-    /// "8월 22일 일반 회의" 형태의 자동 제목 (와이어프레임 1c 노트 1)
-    static func autoTitle(type: MeetingType, date: Date = .now) -> String {
+    /// "8월 22일 회의" 형태의 자동 제목 (와이어프레임 1c 노트 1).
+    /// 유형이 하나뿐이라 유형명은 빼고 날짜만 쓴다 (#21).
+    static func autoTitle(date: Date = .now) -> String {
+        "\(monthDay(date)) 회의"
+    }
+
+    private static func monthDay(_ date: Date) -> String {
         let fmt = DateFormatter()
         fmt.locale = Locale(identifier: "ko_KR")
         fmt.dateFormat = "M월 d일"
-        return "\(fmt.string(from: date)) \(type.displayName) 회의"
+        return fmt.string(from: date)
     }
 
     /// 요약이 뽑아낸 주제로 만든 "2026-08-22 - 킥오프 일정 조율" 형태의 제목.
@@ -120,11 +120,15 @@ final class Meeting {
     /// 사용자가 직접 바꾸지 않은 제목인지 — 자동 제목이거나 이전 요약이 만든 제목.
     /// 후자를 포함해야 템플릿 변경 재요약에서 제목이 첫 요약 결과로 굳지 않는다.
     static func isAutoTitle(_ title: String, date: Date) -> Bool {
-        if MeetingType.allCases.contains(where: { autoTitle(type: $0, date: date) == title }) {
+        if title == autoTitle(date: date) { return true }
+        // 유형별 자동 제목을 쓰던 시절에 만들어진 회의도 자동 제목으로 인정한다 (#21)
+        if legacyTypeNames.contains(where: { "\(monthDay(date)) \($0) 회의" == title }) {
             return true
         }
         return title.hasPrefix(isoDatePrefix(date))
     }
+
+    private static let legacyTypeNames = ["일반", "1on1", "인터뷰", "스탠드업"]
 
     /// 제목은 정렬·검색·파일명으로 흘러가는 값이라 앱의 "M월 d일" 표기 대신 ISO를 쓴다
     private static func isoDatePrefix(_ date: Date) -> String {
@@ -181,10 +185,19 @@ struct SummarySection: Codable, Equatable {
 
 @Model
 final class Summary {
-    var templateTypeRaw: String          // general/oneOnOne/interview/standup
+    var templateTypeRaw: String          // MeetingType rawValue (지금은 general 하나)
     var oneLiner: String = ""            // 한 줄 요약 (홈 카드에도 사용)
-    var sectionsData: Data = Data()      // [SummarySection] JSON
+    var sectionsData: Data = Data()      // [SummarySection] JSON — 내보내기가 읽는 평문 형태
     var generatedAt: Date = Date.distantPast
+    // 회의록 템플릿 구조체들 (#21). 화면은 이 원본을 표로 그리고,
+    // 내보내기는 위 sections(평문)를 그대로 쓴다 — 둘 다 같은 요약에서 나온다.
+    var briefingData: Data = Data()      // [String] JSON — 세 줄 브리핑
+    var decisionsData: Data = Data()     // [DecisionItem] JSON
+    var agendaData: Data = Data()        // [AgendaItem] JSON
+    var parkingLotData: Data = Data()    // [OpenIssue] JSON
+    /// 전사에서 직접 언급됐을 때만 채워지는 머리말 값. 비면 화면에서 줄째로 뺀다.
+    var place: String = ""
+    var absentees: String = ""
     @Relationship(deleteRule: .cascade) var todos: [TodoItem] = []
 
     init(templateTypeRaw: String,
@@ -203,6 +216,33 @@ final class Summary {
         set { sectionsData = (try? JSONEncoder().encode(newValue)) ?? Data() }
     }
 
+    var briefing: [String] {
+        get { (try? JSONDecoder().decode([String].self, from: briefingData)) ?? [] }
+        set { briefingData = (try? JSONEncoder().encode(newValue)) ?? Data() }
+    }
+
+    var decisions: [DecisionItem] {
+        get { (try? JSONDecoder().decode([DecisionItem].self, from: decisionsData)) ?? [] }
+        set { decisionsData = (try? JSONEncoder().encode(newValue)) ?? Data() }
+    }
+
+    var agenda: [AgendaItem] {
+        get { (try? JSONDecoder().decode([AgendaItem].self, from: agendaData)) ?? [] }
+        set { agendaData = (try? JSONEncoder().encode(newValue)) ?? Data() }
+    }
+
+    var parkingLot: [OpenIssue] {
+        get { (try? JSONDecoder().decode([OpenIssue].self, from: parkingLotData)) ?? [] }
+        set { parkingLotData = (try? JSONEncoder().encode(newValue)) ?? Data() }
+    }
+
+    /// 회의록 템플릿 개편(#21) 이전에 저장된 요약인지 — 구조체 칸이 통째로 비어 있다.
+    /// 이런 요약은 저장된 평문 섹션을 그대로 보여주고, 다시 요약해야 새 형태가 된다.
+    var isLegacyShape: Bool {
+        briefingData.isEmpty && decisionsData.isEmpty
+            && agendaData.isEmpty && parkingLotData.isEmpty
+    }
+
     var templateType: MeetingType {
         get { MeetingType(rawValue: templateTypeRaw) ?? .general }
         set { templateTypeRaw = newValue.rawValue }
@@ -216,13 +256,18 @@ final class TodoItem {
     var due: String?           // 자유 텍스트 기한 ("8월 26일")
     var isDone: Bool
     var orderIndex: Int
+    /// 회의 시점의 상태 (완료·진행중·대기) — 회의록 표에 그대로 들어간다 (#21).
+    /// 체크박스(isDone)는 사용자가 나중에 끄고 켜는 값이라 따로 둔다.
+    var status: String = SummaryTemplates.statusWaiting
 
     init(text: String, assignee: String? = nil, due: String? = nil,
-         isDone: Bool = false, orderIndex: Int) {
+         isDone: Bool = false, orderIndex: Int,
+         status: String = SummaryTemplates.statusWaiting) {
         self.text = text
         self.assignee = assignee
         self.due = due
         self.isDone = isDone
         self.orderIndex = orderIndex
+        self.status = status
     }
 }

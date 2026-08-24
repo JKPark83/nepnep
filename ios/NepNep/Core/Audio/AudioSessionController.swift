@@ -13,7 +13,10 @@ final class AudioSessionController {
 
     func activate() throws {
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetoothHFP])
+        // 블루투스 HFP를 허용하면 에어팟을 낀 채 녹음할 때 입력 경로 전체가 HFP로
+        // 내려간다 — 대역이 좁고 잡음 억제가 세게 걸려 전사 품질이 눈에 띄게 나빠진다.
+        // 회의 녹음은 내장 마이크가 낫다고 보고 옵션을 뺐다 (#21 후속).
+        try session.setCategory(.playAndRecord, mode: .default)
         try session.setActive(true)
 
         observer = NotificationCenter.default.addObserver(

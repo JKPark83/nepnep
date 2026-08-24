@@ -7,6 +7,8 @@ struct MeetingDetailView: View {
     @State private var player = AudioPlayerController()
     @State private var showSpeakerSheet = false
     @State private var showExportSheet = false
+    /// 요약 카드로 스크롤할 때 쓰는 앵커
+    private static let summaryAnchor = "summary"
 
     init(meetingID: UUID) {
         _meetings = Query(filter: #Predicate<Meeting> { $0.id == meetingID })
@@ -28,10 +30,17 @@ struct MeetingDetailView: View {
 
     private func content(_ meeting: Meeting) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                header(meeting)
-                SummaryTabView(meeting: meeting)
-                transcriptSection(meeting)
+            ScrollViewReader { proxy in
+                VStack(alignment: .leading, spacing: 24) {
+                    header(meeting)
+                    // 다시 요약을 누르면 애니메이션이 도는 요약 카드로 화면을 올려 준다 —
+                    // 버튼이 카드 맨 아래에 있어 누른 자리에서는 진행 상황이 안 보였다 (#21)
+                    SummaryTabView(meeting: meeting) {
+                        withAnimation { proxy.scrollTo(Self.summaryAnchor, anchor: .top) }
+                    }
+                    .id(Self.summaryAnchor)
+                    transcriptSection(meeting)
+                }
             }
             .padding(.horizontal, DesignTokens.margin)
             .padding(.bottom, 120)   // 하단 고정 바 여백

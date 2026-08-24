@@ -29,8 +29,7 @@ final class AudioFileStoreTests: XCTestCase {
 
     func testAutoTitle() {
         let date = DateComponents(calendar: .current, year: 2026, month: 8, day: 22).date!
-        XCTAssertEqual(Meeting.autoTitle(type: .general, date: date), "8월 22일 일반 회의")
-        XCTAssertEqual(Meeting.autoTitle(type: .standup, date: date), "8월 22일 스탠드업 회의")
+        XCTAssertEqual(Meeting.autoTitle(date: date), "8월 22일 회의")
     }
 
     func testSummaryTitle() {
@@ -47,10 +46,10 @@ final class AudioFileStoreTests: XCTestCase {
 
     func testIsAutoTitle() {
         let date = DateComponents(calendar: .current, year: 2026, month: 8, day: 22).date!
-        // 유형별 자동 제목 — 녹음 중 유형을 바꾼 경우까지 포함
-        for type in MeetingType.allCases {
-            XCTAssertTrue(Meeting.isAutoTitle(Meeting.autoTitle(type: type, date: date), date: date))
-        }
+        XCTAssertTrue(Meeting.isAutoTitle(Meeting.autoTitle(date: date), date: date))
+        // 유형명이 들어가던 시절의 자동 제목도 자동 제목으로 본다 (#21)
+        XCTAssertTrue(Meeting.isAutoTitle("8월 22일 스탠드업 회의", date: date))
+        XCTAssertTrue(Meeting.isAutoTitle("8월 22일 일반 회의", date: date))
         // 이전 요약이 만든 제목 → 재요약 시 갱신 대상
         XCTAssertTrue(Meeting.isAutoTitle("2026-08-22 - 3분기 로드맵 우선순위 조율", date: date))
         // 사용자가 직접 붙인 이름은 보존

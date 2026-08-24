@@ -8,6 +8,11 @@ packages:
   FluidAudio:
     url: https://github.com/FluidInference/FluidAudio.git
     from: 0.12.4
+  # 전사 엔진 목록(engines.yml)을 읽는 용도. 손으로 파싱하려다 인용부호·중첩에서
+  # 틀리느니 쓰던 것을 쓴다.
+  Yams:
+    url: https://github.com/jpsim/Yams.git
+    from: 5.1.0
 settings:
   base:
     # 둘 다 로컬 빌드용 기본값이다 — TestFlight 업로드 때는 CI가 값을 정해 주입한다.
@@ -34,6 +39,7 @@ targets:
       # 워치 앱도 설치할 수 있다"를 만족시키는 지점이다. 별도 App Store 등재가 아니다.
       - target: NepNepWatch
       - package: FluidAudio
+      - package: Yams
     settings:
       base:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -79,6 +85,16 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: com.nepnep.NepNep.oauth
             CFBundleURLSchemes: [nepnep]
+        # engines.yml을 파일 앱에서 직접 고칠 수 있게 문서 폴더를 연다 (#21 후속)
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        # 테일스케일 tailnet에는 HTTPS 인증서가 없다 — 집 맥에 붙는 경로만 평문
+        # HTTP를 허용한다. 이 트래픽은 이미 WireGuard로 암호화돼 나간다.
+        NSAppTransportSecurity:
+          NSExceptionDomains:
+            ts.net:
+              NSIncludesSubdomains: true
+              NSExceptionAllowsInsecureHTTPLoads: true
   NepNepWidgets:
     type: app-extension
     platform: iOS

@@ -1,7 +1,11 @@
 import SwiftData
 import SwiftUI
 
-/// 할 일 행 (와이어프레임 1e: 22pt 체크박스 + 취소선 + 담당자·기한 배지)
+/// 할 일 행 (와이어프레임 1e: 22pt 체크박스 + 취소선)
+///
+/// 담당자·기한·상태 배지는 걷어냈다 (#21). 모델이 기한 칸에 "완료"를 넣어
+/// 같은 배지가 나란히 두 번 붙는 등 값 자체를 믿기 어려웠고, 화면에서 필요한 건
+/// 할 일 목록 그 자체였다. 값은 계속 저장돼 내보내기에는 그대로 실린다.
 struct TodoRowView: View {
     @Bindable var todo: TodoItem
     @Environment(\.modelContext) private var modelContext
@@ -9,24 +13,13 @@ struct TodoRowView: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             checkbox
-            VStack(alignment: .leading, spacing: 4) {
-                Text(todo.text)
-                    .font(.system(size: 15))
-                    .strikethrough(todo.isDone)
-                    .foregroundStyle(todo.isDone
-                                     ? DesignTokens.textSecondary
-                                     : DesignTokens.textPrimary)
-                if todo.assignee != nil || todo.due != nil {
-                    HStack(spacing: 6) {
-                        if let assignee = todo.assignee {
-                            badge(assignee)
-                        }
-                        if let due = todo.due {
-                            badge(due)
-                        }
-                    }
-                }
-            }
+            Text(todo.text)
+                .font(.system(size: 15))
+                .strikethrough(todo.isDone)
+                .foregroundStyle(todo.isDone
+                                 ? DesignTokens.textSecondary
+                                 : DesignTokens.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
         .contentShape(Rectangle())
@@ -50,15 +43,5 @@ struct TodoRowView: View {
                         .stroke(DesignTokens.textSecondary.opacity(0.35), lineWidth: 2)
                 }
             }
-    }
-
-    private func badge(_ text: String) -> some View {
-        Text(text)
-            .font(.caption2.weight(.medium))
-            .foregroundStyle(DesignTokens.textSecondary)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(DesignTokens.textSecondary.opacity(0.1))
-            .clipShape(Capsule())
     }
 }

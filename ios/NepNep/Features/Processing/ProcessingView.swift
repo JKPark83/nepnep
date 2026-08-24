@@ -123,7 +123,8 @@ struct ProcessingView: View {
                         .foregroundStyle(DesignTokens.textSecondary)
                 }
                 if stage == .summarize, meeting.status == .done, meeting.summaryUnavailable {
-                    Text("이 기기에서는 요약을 만들 수 없었어요")
+                    // 실패 사유가 있으면 그대로 — 없으면 기기 미지원 (#21)
+                    Text(meeting.summaryFailureReason ?? "이 기기에서는 요약을 만들 수 없었어요")
                         .font(.caption)
                         .foregroundStyle(DesignTokens.textSecondary)
                 }
