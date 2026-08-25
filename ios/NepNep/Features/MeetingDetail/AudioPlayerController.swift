@@ -17,9 +17,7 @@ final class AudioPlayerController {
     func load(meeting: Meeting) {
         guard player == nil else { return }
         guard let fileName = meeting.audioFileName else { return }
-        let url = FileManager.default
-            .urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent(fileName)
+        let url = AudioFileStore.container.appendingPathComponent(fileName)
         guard let loaded = try? AVAudioPlayer(contentsOf: url) else { return }
         loaded.prepareToPlay()
         player = loaded
