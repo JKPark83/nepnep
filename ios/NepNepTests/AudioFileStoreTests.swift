@@ -27,6 +27,77 @@ final class AudioFileStoreTests: XCTestCase {
                        ["chunk-000.caf", "chunk-001.caf", "chunk-002.caf"])
     }
 
+    // MARK: - 문서 폴더 → 지원 폴더 이사
+
+    /// 파일을 옮기는 코드라 틀리면 남의 녹음이 사라진다. 손으로 확인하기도
+    /// 어렵다 — 이미 옮긴 기기에서는 두 번 다시 재현되지 않는다.
+    func testMigrationMovesRecordingsOutOfDocuments() throws {
+        let (documents, container) = try sandbox()
+        let id = UUID().uuidString
+        try write("옛 녹음", to: documents, "audio/\(id)/recording.m4a")
+        try write("워치 파일", to: documents, "watch-inbox/\(id).m4a")
+
+        AudioFileStore.migrate(from: documents, to: container)
+
+        XCTAssertEqual(read(container, "audio/\(id)/recording.m4a"), "옛 녹음")
+        XCTAssertEqual(read(container, "watch-inbox/\(id).m4a"), "워치 파일")
+        // 다 옮겼으면 빈 껍데기는 남기지 않는다 — 파일 앱에 빈 폴더가 보인다
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: documents.appendingPathComponent("audio").path))
+    }
+
+    /// 목적지에 같은 회의가 이미 있으면 건드리지 않는다.
+    /// 새로 녹음한 쪽을 옛것으로 덮어쓰는 편이 훨씬 나쁘다.
+    func testMigrationNeverOverwritesNewerRecording() throws {
+        let (documents, container) = try sandbox()
+        let id = UUID().uuidString
+        try write("옛 녹음", to: documents, "audio/\(id)/recording.m4a")
+        try write("새 녹음", to: container, "audio/\(id)/recording.m4a")
+
+        AudioFileStore.migrate(from: documents, to: container)
+
+        XCTAssertEqual(read(container, "audio/\(id)/recording.m4a"), "새 녹음")
+        // 옮기지 못한 것은 문서 폴더에 그대로 남는다 — 지우면 복구할 길이 없다
+        XCTAssertEqual(read(documents, "audio/\(id)/recording.m4a"), "옛 녹음")
+    }
+
+    /// 앱을 켤 때마다 도는 코드다. 옮길 게 없으면 조용히 지나가야 한다.
+    func testMigrationIsIdempotent() throws {
+        let (documents, container) = try sandbox()
+        let id = UUID().uuidString
+        try write("녹음", to: documents, "audio/\(id)/recording.m4a")
+
+        AudioFileStore.migrate(from: documents, to: container)
+        AudioFileStore.migrate(from: documents, to: container)
+
+        XCTAssertEqual(read(container, "audio/\(id)/recording.m4a"), "녹음")
+    }
+
+    // MARK: - 조각
+
+    private func sandbox() throws -> (documents: URL, container: URL) {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: root) }
+        let documents = root.appendingPathComponent("Documents", isDirectory: true)
+        let container = root.appendingPathComponent("Application Support", isDirectory: true)
+        for url in [documents, container] {
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        }
+        return (documents, container)
+    }
+
+    private func write(_ text: String, to base: URL, _ path: String) throws {
+        let url = base.appendingPathComponent(path)
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try text.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    private func read(_ base: URL, _ path: String) -> String? {
+        try? String(contentsOf: base.appendingPathComponent(path), encoding: .utf8)
+    }
+
     func testAutoTitle() {
         let date = DateComponents(calendar: .current, year: 2026, month: 8, day: 22).date!
         XCTAssertEqual(Meeting.autoTitle(date: date), "8월 22일 회의")
