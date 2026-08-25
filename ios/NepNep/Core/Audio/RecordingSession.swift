@@ -31,10 +31,17 @@ final class RecordingSession {
     /// 4시간 도달 자동 정지 알림 (F1-6)
     var didAutoStop = false
 
+    /// 녹음 중 라이브 자막 (PRD F2-4 예외). 화면에만 쓰고 정지하면 버린다 —
+    /// 저장되는 전사는 지금까지처럼 종료 후 일괄 파이프라인이 만든다.
+    private(set) var liveText = LiveTranscriptBuffer()
+    /// 자막이 실제로 돌고 있는지. 꺼져 있거나 에셋이 없으면 화면이 자막 영역을 감춘다.
+    private(set) var isLiveTranscribing = false
+
     private let engine = AVAudioEngine()
     private let sessionController = AudioSessionController()
     private var writer: ChunkedAudioWriter?
     private var converter: AVAudioConverter?
+    private var live: LiveTranscriber?
     private var ticker: Timer?
     private var lastTickAt: Date?
     private var interruptionBeganAt: TimeInterval?
@@ -61,7 +68,7 @@ final class RecordingSession {
             return
         }
 
-        let meeting = Meeting(title: Meeting.autoTitle(type: type), type: type)
+        let meeting = Meeting(title: Meeting.autoTitle(), type: type)
         modelContext?.insert(meeting)
         try? modelContext?.save()
         currentMeeting = meeting
@@ -83,6 +90,7 @@ final class RecordingSession {
         silenceSeconds = 0
         state = .recording
         startTicker()
+        await startLiveTranscription()
         RecordingLiveActivityController.shared.start(title: meeting.title)
     }
 
@@ -122,17 +130,24 @@ final class RecordingSession {
         let writer = ChunkedAudioWriter(meetingID: meetingID)
         self.writer = writer
 
+        // 라이브 자막기는 탭이 붙기 전에 만들어 둬야 클로저가 잡아 갈 수 있다.
+        // 분석기가 뜨기 전까지는 feed()가 조용히 버린다.
+        let live = LiveTranscriber()
+        self.live = live
+
         input.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in
             self?.processTap(buffer: buffer, converter: converter, writer: writer,
+                             live: live,
                              ratio: targetFormat.sampleRate / inputFormat.sampleRate)
         }
         try engine.start()
     }
 
-    /// 탭 콜백 (오디오 스레드): RMS 계산 + 16k mono 변환 + 청크 기록
+    /// 탭 콜백 (오디오 스레드): RMS 계산 + 16k mono 변환 + 청크 기록 + 라이브 자막 공급
     nonisolated private func processTap(buffer: AVAudioPCMBuffer,
                                         converter: AVAudioConverter,
                                         writer: ChunkedAudioWriter,
+                                        live: LiveTranscriber,
                                         ratio: Double) {
         // 레벨 (RMS→dB)
         var db: Float = -160
@@ -164,7 +179,26 @@ final class RecordingSession {
         }
         if error == nil, out.frameLength > 0 {
             writer.append(out)
+            // 같은 버퍼를 라이브 자막에도 흘린다. 여기서 뭐가 잘못돼도 저장은
+            // 이미 끝난 뒤라 녹음에는 영향이 없다.
+            live.feed(out)
         }
+    }
+
+    // MARK: - 라이브 자막 (PRD F2-4 예외)
+
+    /// 설정에서 껐거나 언어 에셋이 없으면 조용히 비활성으로 남는다 — 알럿은 띄우지 않는다
+    private func startLiveTranscription() async {
+        guard let live else { return }
+        liveText.reset()
+        await live.start(sourceFormat: converter?.outputFormat) { [weak self] update in
+            guard let self else { return }
+            switch update {
+            case .pending(let text): liveText.setPending(text)
+            case .final(let text): liveText.commit(text)
+            }
+        }
+        isLiveTranscribing = live.isActive
     }
 
     // MARK: - 일시정지·재개
@@ -172,6 +206,7 @@ final class RecordingSession {
     func pause() {
         guard state == .recording else { return }
         engine.pause()
+        live?.pause()
         state = .pausedByUser
         RecordingLiveActivityController.shared.update(elapsed: elapsed, isPaused: true)
     }
@@ -180,6 +215,7 @@ final class RecordingSession {
         guard state == .pausedByUser || state == .pausedByInterruption else { return }
         do {
             try engine.start()
+            live?.resume()
             state = .recording
             RecordingLiveActivityController.shared.update(elapsed: elapsed, isPaused: false)
         } catch {
@@ -192,6 +228,7 @@ final class RecordingSession {
         case .began:
             guard state == .recording else { return }
             engine.pause()
+            live?.pause()
             state = .pausedByInterruption
             interruptionBeganAt = elapsed
             RecordingLiveActivityController.shared.update(elapsed: elapsed, isPaused: true)
@@ -214,6 +251,7 @@ final class RecordingSession {
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         sessionController.deactivate()
+        stopLiveTranscription()
         RecordingLiveActivityController.shared.end()
 
         guard let meeting = currentMeeting else {
@@ -239,6 +277,15 @@ final class RecordingSession {
         converter = nil
         currentMeeting = nil
         state = .idle
+    }
+
+    /// 자막 텍스트는 여기서 버린다 — 저장되는 전사는 일괄 파이프라인이 만든다
+    private func stopLiveTranscription() {
+        let live = self.live
+        self.live = nil
+        isLiveTranscribing = false
+        liveText.reset()
+        Task { await live?.finish() }
     }
 
     // MARK: - 경과 시간

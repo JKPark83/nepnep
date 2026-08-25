@@ -1,0 +1,56 @@
+# 전사를 맡길 곳 목록. 설정 > 전사 엔진에서 이 중 하나를 고른다.
+#
+# 이 파일은 앱 번들에 들어가는 기본값이다. 파일 앱 > 나의 iPhone > 넵넵 에
+# engines.yml 을 넣어 두면 그쪽이 우선한다 — 재빌드 없이 서버를 바꿀 수 있고,
+# 잘못 써서 읽히지 않으면 조용히 이 기본값으로 돌아간다.
+#
+# API 키는 여기 적지 않는다. apiKeyRef 로 이름만 적어 두고 실제 값은 설정
+# 화면에서 입력해 키체인에 넣는다.
+#
+# kind
+#   onDevice  아이폰 안에서 처리. 주소도 키도 없다.
+#   openAI    POST {url}/v1/audio/transcriptions — 맥미니 서버·OpenAI·Groq가 모두 이 규격.
+#   deepgram  POST {url}/v1/listen — 규격이 따로다. 서버가 화자분리까지 해 준다.
+
+engines:
+  - id: speechTranscriber
+    name: 기기 안에서 (기본)
+    kind: onDevice
+    language: ko
+    note: 인터넷 없이 아이폰 안에서 처리합니다.
+
+  - id: macmini
+    name: 맥미니 (Whisper)
+    kind: openAI
+    url: http://macmini.tailc6bd83.ts.net:8927
+    model: whisper-large-v3-turbo
+    language: ko
+    note: 테일스케일로 집 맥에 붙습니다. 맥이 깨어 있어야 합니다.
+
+  - id: groq
+    name: Groq (Whisper large-v3-turbo)
+    kind: openAI
+    url: https://api.groq.com/openai
+    model: whisper-large-v3-turbo
+    language: ko
+    apiKeyRef: groq
+    note: 맥미니와 같은 모델을 클라우드에서. 설정에서 API 키가 필요합니다.
+
+  - id: openai
+    name: OpenAI (gpt-4o-transcribe)
+    kind: openAI
+    url: https://api.openai.com
+    model: gpt-4o-transcribe
+    language: ko
+    apiKeyRef: openai
+    note: 설정에서 API 키가 필요합니다.
+
+  - id: deepgram
+    name: Deepgram (Nova-3)
+    kind: deepgram
+    url: https://api.deepgram.com
+    model: nova-3
+    language: ko
+    apiKeyRef: deepgram
+    diarizes: true
+    note: 화자분리까지 서버가 합니다. 설정에서 API 키가 필요합니다.

@@ -77,7 +77,7 @@ enum DebugSeed {
     }
 
     private static func makeProcessingMeeting() -> Meeting {
-        let meeting = Meeting(title: "디자인 리뷰 1on1", type: .oneOnOne,
+        let meeting = Meeting(title: "디자인 리뷰 1on1", type: .general,
                               createdAt: .now.addingTimeInterval(-30 * 60))
         meeting.duration = 22 * 60
         meeting.status = .processing
@@ -87,7 +87,7 @@ enum DebugSeed {
     }
 
     private static func makeFailedMeeting() -> Meeting {
-        let meeting = Meeting(title: "8월 21일 스탠드업 회의", type: .standup,
+        let meeting = Meeting(title: "8월 21일 스탠드업 회의", type: .general,
                               createdAt: .now.addingTimeInterval(-26 * 3600))
         meeting.duration = 15 * 60
         meeting.status = .failed

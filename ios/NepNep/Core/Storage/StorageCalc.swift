@@ -33,15 +33,4 @@ enum StorageCalc {
             ? "\(Int(rounded))\(unit)"
             : String(format: "%.1f%@", rounded, unit)
     }
-
-    /// 전사·요약 = SwiftData 스토어 파일 크기 (default.store + -wal/-shm)
-    static func dataStoreBytes() -> Int64 {
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory,
-                                           in: .userDomainMask)[0]
-        let files = (try? FileManager.default.contentsOfDirectory(
-            at: dir, includingPropertiesForKeys: [.fileSizeKey])) ?? []
-        return files
-            .filter { $0.lastPathComponent.hasPrefix("default.store") }
-            .reduce(Int64(0)) { $0 + AudioFileStore.fileSize(at: $1) }
-    }
 }

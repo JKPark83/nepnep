@@ -227,12 +227,9 @@ struct HomeView: View {
     private var fabLayer: some View {
         VStack {
             Spacer()
-            Menu {
-                ForEach(MeetingType.allCases, id: \.self) { type in
-                    Button(type.displayName) {
-                        recordingLaunch = RecordingLaunch(type: type)
-                    }
-                }
+            // 회의 유형이 하나로 정리돼 길게 눌러 고를 것이 없어졌다 (#21)
+            Button {
+                recordingLaunch = RecordingLaunch(type: MeetingType.defaultType)
             } label: {
                 Image(systemName: "mic.fill")
                     .font(.title2)
@@ -241,8 +238,6 @@ struct HomeView: View {
                     .foregroundStyle(.white)
                     .clipShape(Circle())
                     .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
-            } primaryAction: {
-                recordingLaunch = RecordingLaunch(type: MeetingType.defaultType)
             }
             .padding(.bottom, 24)
         }
