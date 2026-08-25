@@ -106,7 +106,7 @@ final class RemoteTranscriptionEngine: NSObject, TranscriptionEngine {
         defer { onUploadProgress = nil }
 
         let data: Data
-        if descriptor.usesJobAPI {
+        if await usesJobAPI() {
             data = try await runJob(uploading: body)
         } else {
             let (payload, response) = try await urlSession.upload(
@@ -131,6 +131,41 @@ final class RemoteTranscriptionEngine: NSObject, TranscriptionEngine {
     }
 
     // MARK: - 맡기고 찾아가기
+
+    /// 이 서버에 맡겨 둘 수 있는가. YAML보다 서버에 물어본 답을 먼저 믿는다.
+    ///
+    /// engines.yml의 `jobs: true`만 보고 정했더니, 파일 앱에서 목록을 한 번
+    /// 복사해 둔 사람은 앱을 업데이트해도 그 옛 파일이 번들 기본값을 이겨서
+    /// 계속 옛 경로로 갔다 — 백그라운드에 다녀오면 여전히 -1005였다. 서버 기능은
+    /// 설정 파일이 아니라 서버가 알고 있다.
+    private func usesJobAPI() async -> Bool {
+        if descriptor.usesJobAPI { return true }
+        guard descriptor.kind == .openAI else { return false }
+        if let detectedJobSupport { return detectedJobSupport }
+        let detected = await detectJobSupport()
+        detectedJobSupport = detected
+        return detected
+    }
+
+    private var detectedJobSupport: Bool?
+
+    /// `/health`가 작업 수를 세어 주면 넵넵 서버다. 남의 서버는 이 경로가 없다.
+    private func detectJobSupport() async -> Bool {
+        guard let base = descriptor.baseURL else { return false }
+        var request = URLRequest(url: base.appending(path: "health"))
+        request.timeoutInterval = 5
+        try? authorize(&request)
+
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200 else { return false }
+        return Self.serverKnowsJobs(data)
+    }
+
+    /// `/health` 본문에 작업 수가 세어져 있으면 넵넵 서버다.
+    static func serverKnowsJobs(_ data: Data) -> Bool {
+        struct Health: Decodable { let jobs: Int? }
+        return (try? JSONDecoder().decode(Health.self, from: data))?.jobs != nil
+    }
 
     /// 물어보는 간격. 전사가 몇 분짜리라 자주 찌를 이유가 없다.
     private static let pollInterval: Duration = .seconds(3)

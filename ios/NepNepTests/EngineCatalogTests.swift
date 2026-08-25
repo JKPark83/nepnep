@@ -190,6 +190,24 @@ final class EngineCatalogTests: XCTestCase {
         XCTAssertThrowsError(try RemoteTranscriptionEngine.parseDeepgram(Data("{}".utf8)))
     }
 
+    // MARK: - 이 서버가 맡아 주는가
+
+    /// YAML에 안 적혀 있어도 서버가 답하면 맡긴다 — 파일 앱에 옛 engines.yml을
+    /// 복사해 둔 사람이 앱을 업데이트해도 옛 경로에 묶여 있던 것을 푼 자리다.
+    func testServerKnowsJobsFromHealth() {
+        let ours = Data(#"{"status":"ok","model":"whisper-large-v3-turbo","jobs":0}"#.utf8)
+        XCTAssertTrue(RemoteTranscriptionEngine.serverKnowsJobs(ours))
+    }
+
+    func testServerKnowsJobsRejectsOtherServers() {
+        // 작업 수를 안 세는 옛 넵넵 서버
+        XCTAssertFalse(RemoteTranscriptionEngine.serverKnowsJobs(
+            Data(#"{"status":"ok","model":"whisper-large-v3-turbo"}"#.utf8)))
+        // /health가 아예 없는 서버가 돌려주는 것들
+        XCTAssertFalse(RemoteTranscriptionEngine.serverKnowsJobs(Data(#"{"error":"not found"}"#.utf8)))
+        XCTAssertFalse(RemoteTranscriptionEngine.serverKnowsJobs(Data("<html>404</html>".utf8)))
+    }
+
     // MARK: - 맡긴 작업의 상태
 
     func testParseJobStateReadsRunning() throws {
