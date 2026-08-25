@@ -27,11 +27,18 @@ struct EngineDescriptor: Identifiable, Equatable {
     let apiKeyRef: String?
     /// 서버가 화자분리까지 해 주는가. 참이면 기기 안 화자분리를 건너뛴다.
     let diarizes: Bool
+    /// 서버가 `POST /v1/jobs`로 맡기고 나중에 찾아가는 길을 여는가.
+    ///
+    /// 한 연결로 전사를 끝까지 기다리면 앱이 백그라운드로 내려가는 순간 iOS가
+    /// 소켓을 끊어 버린다("-1005"). 맡겨 두고 가끔 물어보는 쪽은 요청 하나가
+    /// 몇 초짜리라 그럴 일이 없다. 넵넵 서버만 이 길을 안다.
+    let jobs: Bool
     /// 설정 화면에 한 줄로 붙는 설명
     let note: String?
 
     var engineID: EngineID { EngineID(id) }
     var needsAPIKey: Bool { apiKeyRef?.isEmpty == false }
+    var usesJobAPI: Bool { jobs && kind == .openAI }
 
     /// 기기 안 전사 — YAML을 못 읽어도 이건 언제나 있다
     static let onDevice = EngineDescriptor(
@@ -43,5 +50,6 @@ struct EngineDescriptor: Identifiable, Equatable {
         language: "ko",
         apiKeyRef: nil,
         diarizes: false,
+        jobs: false,
         note: "인터넷 없이 아이폰 안에서 처리합니다.")
 }
