@@ -32,6 +32,38 @@ final class EngineCatalogTests: XCTestCase {
         XCTAssertEqual(engine.note, "집 맥에 붙습니다")
         XCTAssertFalse(engine.diarizes)
         XCTAssertFalse(engine.needsAPIKey)
+        // 안 적으면 꺼져 있어야 한다 — 남의 서버에 없는 경로를 찌르면 안 된다
+        XCTAssertFalse(engine.usesJobAPI)
+    }
+
+    /// 맡기고 찾아가는 길은 넵넵 서버만 안다. 켜고 끄는 것이 YAML 한 줄이다.
+    func testParseReadsJobsFlag() throws {
+        let engines = try EngineCatalog.parse("""
+        engines:
+          - id: macmini
+            kind: openAI
+            url: http://macmini.tailc6bd83.ts.net:8927
+            jobs: true
+        """)
+        XCTAssertTrue(engines.first?.usesJobAPI == true)
+    }
+
+    /// 번들 기본값의 맥미니는 이 길로 가야 한다 — 안 그러면 긴 회의가
+    /// 백그라운드에서 -1005로 죽는 자리로 돌아간다
+    func testBundledMacminiUsesJobAPI() throws {
+        XCTAssertTrue(try bundledCatalog().first { $0.id == "macmini" }?.usesJobAPI == true)
+    }
+
+    /// 규격이 다른 Deepgram에는 jobs를 켜도 이 길이 열리면 안 된다
+    func testJobsFlagIgnoredForDeepgram() throws {
+        let engines = try EngineCatalog.parse("""
+        engines:
+          - id: deepgram
+            kind: deepgram
+            url: https://api.deepgram.com
+            jobs: true
+        """)
+        XCTAssertFalse(engines.first?.usesJobAPI == true)
     }
 
     /// 기기 안 엔진은 주소가 없어도 통과해야 한다
@@ -94,11 +126,15 @@ final class EngineCatalogTests: XCTestCase {
 
     /// 번들에 구워 나가는 기본 목록이 항상 읽혀야 한다
     func testBundledCatalogParses() throws {
-        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "engines", withExtension: "yml")
-            ?? Bundle.main.url(forResource: "engines", withExtension: "yml"))
-        let engines = try EngineCatalog.parse(String(contentsOf: url, encoding: .utf8))
+        let engines = try bundledCatalog()
         XCTAssertFalse(engines.isEmpty)
         XCTAssertEqual(engines.first?.id, EngineID.speechTranscriber.rawValue)
+    }
+
+    private func bundledCatalog() throws -> [EngineDescriptor] {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "engines", withExtension: "yml")
+            ?? Bundle.main.url(forResource: "engines", withExtension: "yml"))
+        return try EngineCatalog.parse(String(contentsOf: url, encoding: .utf8))
     }
 
     // MARK: - 응답 읽기
@@ -152,5 +188,37 @@ final class EngineCatalogTests: XCTestCase {
 
     func testParseDeepgramRejectsUnexpectedShape() {
         XCTAssertThrowsError(try RemoteTranscriptionEngine.parseDeepgram(Data("{}".utf8)))
+    }
+
+    // MARK: - 맡긴 작업의 상태
+
+    func testParseJobStateReadsRunning() throws {
+        let json = Data(#"{"status":"running","elapsed":12.5}"#.utf8)
+        XCTAssertEqual(try RemoteTranscriptionEngine.parseJobState(json), .running)
+    }
+
+    func testParseJobStateReadsFailure() throws {
+        let json = Data(#"{"status":"failed","error":{"message":"오디오를 못 읽었습니다"}}"#.utf8)
+        XCTAssertEqual(try RemoteTranscriptionEngine.parseJobState(json),
+                       .failed("오디오를 못 읽었습니다"))
+    }
+
+    /// 끝난 결과는 감싸지 않고 그대로 실려 온다. 상태를 읽은 다음 같은 바이트를
+    /// 전사 응답 파서에 그대로 넘길 수 있어야 한다 — 그러라고 이렇게 만들었다.
+    func testParseJobStateDoneKeepsBodyReadable() throws {
+        let json = Data("""
+        {"status":"done","text":"안녕하세요",
+         "words":[{"word":"안녕하세요 ","start":0.0,"end":1.0,"probability":0.9}]}
+        """.utf8)
+
+        XCTAssertEqual(try RemoteTranscriptionEngine.parseJobState(json), .done)
+        XCTAssertEqual(try RemoteTranscriptionEngine.parseOpenAI(json).first?.text, "안녕하세요 ")
+    }
+
+    func testParseJobStateRejectsUnknownStatus() {
+        XCTAssertThrowsError(
+            try RemoteTranscriptionEngine.parseJobState(Data(#"{"status":"뭐지"}"#.utf8)))
+        XCTAssertThrowsError(
+            try RemoteTranscriptionEngine.parseJobState(Data("{}".utf8)))
     }
 }

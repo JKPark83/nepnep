@@ -137,6 +137,7 @@ final class EngineCatalog {
                 language: (row["language"] as? String)?.trimmed,
                 apiKeyRef: (row["apiKeyRef"] as? String)?.trimmed,
                 diarizes: row["diarizes"] as? Bool ?? false,
+                jobs: row["jobs"] as? Bool ?? false,
                 note: (row["note"] as? String)?.trimmed)
         }
     }
