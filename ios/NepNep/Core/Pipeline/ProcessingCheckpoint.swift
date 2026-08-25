@@ -1,7 +1,7 @@
 import Foundation
 
 /// 단계별 중간 산출물 저장·복원 (03-m2 §3, F10-2)
-/// Documents/audio/<meetingID>/checkpoint/{words.json, segments.json, state.json}
+/// Application Support/audio/<meetingID>/checkpoint/{words.json, segments.json, state.json}
 struct ProcessingCheckpoint {
     enum Stage: String, Codable {
         case transcribed

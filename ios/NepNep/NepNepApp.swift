@@ -10,6 +10,8 @@ struct NepNepApp: App {
     init() {
         container = try! ModelContainer(
             for: Meeting.self, Speaker.self, Utterance.self, Summary.self, TodoItem.self)
+        // 녹음을 문서 폴더 밖으로 옮긴다 — 아래 복구·재개가 파일을 찾기 전에 끝나야 한다
+        AudioFileStore.migrateFromDocumentsIfNeeded()
         // 크래시 복구 검사 (02-m1 §5) — 복구되면 status == .recorded → 홈 배너 노출
         _ = CrashRecovery.recoverIfNeeded(context: container.mainContext)
         RecordingSession.shared.modelContext = container.mainContext

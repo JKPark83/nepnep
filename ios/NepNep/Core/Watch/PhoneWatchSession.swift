@@ -117,8 +117,8 @@ extension PhoneWatchSession: WCSessionDelegate {
 /// 워치에서 막 도착한 파일을 잠시 두는 곳. 디코드가 끝나면 지운다.
 enum WatchInbox {
     static var directory: URL {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("watch-inbox", isDirectory: true)
+        // 녹음과 같은 자리에 둔다 — 문서 폴더는 파일 앱에 열려 있다
+        AudioFileStore.container.appendingPathComponent("watch-inbox", isDirectory: true)
     }
 
     static func stage(_ source: URL, envelope: WatchRecordingEnvelope) throws -> URL {
