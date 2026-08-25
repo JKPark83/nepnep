@@ -9,6 +9,10 @@ import Foundation
 ///
 /// 올릴 때는 녹음 원본(CAF, 16kHz PCM)이 아니라 m4a로 줄여 보낸다. 48분 회의가
 /// 93MB에서 12MB가 된다 — 전사기에 들어가는 소리는 어차피 같은 16kHz다.
+///
+/// 넵넵 서버(`jobs: true`)에는 맡겨 두고 나중에 찾아간다. 한 연결로 끝까지
+/// 기다리면 앱이 백그라운드로 내려가는 순간 iOS가 앱을 재우면서 소켓이 끊겨
+/// "-1005"가 뜬다 — 몇 분씩 걸리는 긴 회의에서 실제로 그랬다.
 final class RemoteTranscriptionEngine: NSObject, TranscriptionEngine {
     let descriptor: EngineDescriptor
 
@@ -101,14 +105,16 @@ final class RemoteTranscriptionEngine: NSObject, TranscriptionEngine {
         onUploadProgress = progress
         defer { onUploadProgress = nil }
 
-        let (data, response) = try await urlSession.upload(
-            for: try buildRequest(),
-            fromFile: body,
-            delegate: self)
-
-        guard let http = response as? HTTPURLResponse else { throw RemoteError.badResponse }
-        guard (200..<300).contains(http.statusCode) else {
-            throw RemoteError.badStatus(http.statusCode, String(decoding: data, as: UTF8.self))
+        let data: Data
+        if descriptor.usesJobAPI {
+            data = try await runJob(uploading: body)
+        } else {
+            let (payload, response) = try await urlSession.upload(
+                for: try buildRequest(),
+                fromFile: body,
+                delegate: self)
+            try Self.check(response, payload)
+            data = payload
         }
 
         let parsed: (words: [TranscriptWord], segments: [SpeakerSegment]?)
@@ -124,7 +130,95 @@ final class RemoteTranscriptionEngine: NSObject, TranscriptionEngine {
         return parsed.words
     }
 
+    // MARK: - 맡기고 찾아가기
+
+    /// 물어보는 간격. 전사가 몇 분짜리라 자주 찌를 이유가 없다.
+    private static let pollInterval: Duration = .seconds(3)
+    /// 물어보는 요청 하나에 주는 시간. 올릴 때(10분)와 달리 짧아야 한다 —
+    /// 답이 안 오면 다시 물어보면 그만이다.
+    private static let pollTimeout: TimeInterval = 30
+    /// 이때까지도 안 끝났으면 서버에 무슨 일이 난 것으로 본다.
+    private static let jobDeadline: TimeInterval = 3600
+    /// 앱이 백그라운드에 있는 동안은 요청이 통째로 실패한다. 연달아 이만큼
+    /// 실패해야 진짜 포기한다 — 한 번 실패했다고 놓으면 잠깐 나갔다 온 것만으로 끝난다.
+    private static let pollFailureLimit = 20
+
+    private func runJob(uploading body: URL) async throws -> Data {
+        var request = try openAIRequest(path: "v1/jobs")
+        request.timeoutInterval = Self.requestTimeout
+        let (data, response) = try await urlSession.upload(
+            for: request, fromFile: body, delegate: self)
+        try Self.check(response, data)
+
+        struct Handle: Decodable { let id: String }
+        guard let handle = try? JSONDecoder().decode(Handle.self, from: data) else {
+            throw RemoteError.badResponse
+        }
+        return try await poll(jobID: handle.id)
+    }
+
+    private func poll(jobID: String) async throws -> Data {
+        let url = descriptor.baseURL!.appending(path: "v1/jobs/\(jobID)")
+        let deadline = Date().addingTimeInterval(Self.jobDeadline)
+        var failures = 0
+
+        while Date() < deadline {
+            try await Task.sleep(for: Self.pollInterval)
+            do {
+                var request = URLRequest(url: url)
+                request.timeoutInterval = Self.pollTimeout
+                try authorize(&request)
+                let (data, response) = try await urlSession.data(for: request)
+                try Self.check(response, data)   // 404면 만료됐거나 서버가 다시 떴다
+                failures = 0
+                switch try Self.parseJobState(data) {
+                case .running: continue
+                case .done: return data
+                case .failed(let message): throw RemoteError.badStatus(200, message)
+                }
+            } catch let error as RemoteError {
+                throw error   // 서버가 답을 준 실패다. 다시 물어봐도 같은 답이 온다.
+            } catch {
+                failures += 1
+                if failures > Self.pollFailureLimit { throw error }
+            }
+        }
+        throw RemoteError.badStatus(408, "서버가 한 시간이 넘도록 끝내지 못했습니다.")
+    }
+
+    enum JobState: Equatable {
+        case running
+        case done
+        case failed(String)
+    }
+
+    /// 맡긴 작업의 상태. 끝난 결과는 감싸지 않고 그대로 실려 오므로 여기서는
+    /// status만 보고, 본문은 호출 측이 `parseOpenAI`로 읽는다.
+    static func parseJobState(_ data: Data) throws -> JobState {
+        struct Payload: Decodable {
+            struct Failure: Decodable { let message: String }
+            let status: String?
+            let error: Failure?
+        }
+        guard let payload = try? JSONDecoder().decode(Payload.self, from: data) else {
+            throw RemoteError.badResponse
+        }
+        switch payload.status {
+        case "running": return .running
+        case "done": return .done
+        case "failed": return .failed(payload.error?.message ?? "서버가 이유를 말하지 않았습니다.")
+        default: throw RemoteError.badResponse
+        }
+    }
+
     // MARK: - 요청 만들기
+
+    private static func check(_ response: URLResponse, _ data: Data) throws {
+        guard let http = response as? HTTPURLResponse else { throw RemoteError.badResponse }
+        guard (200..<300).contains(http.statusCode) else {
+            throw RemoteError.badStatus(http.statusCode, String(decoding: data, as: UTF8.self))
+        }
+    }
 
     private func healthURL() -> URL {
         guard let base = descriptor.baseURL else { return URL(string: "http://127.0.0.1")! }
@@ -167,7 +261,7 @@ final class RemoteTranscriptionEngine: NSObject, TranscriptionEngine {
         var request: URLRequest
         switch descriptor.kind {
         case .deepgram: request = try deepgramRequest()
-        case .openAI, .onDevice: request = try openAIRequest()
+        case .openAI, .onDevice: request = try openAIRequest(path: "v1/audio/transcriptions")
         }
         // URLRequest 자신의 기본 60초가 세션 설정을 이긴다. 여기서 안 덮으면
         // 긴 회의는 서버가 아직 도는 중에 클라이언트가 먼저 포기한다.
@@ -177,9 +271,8 @@ final class RemoteTranscriptionEngine: NSObject, TranscriptionEngine {
 
     private var multipartBoundary: String { "nepnep-\(descriptor.id)-boundary" }
 
-    private func openAIRequest() throws -> URLRequest {
-        let url = descriptor.baseURL!.appending(path: "v1/audio/transcriptions")
-        var request = URLRequest(url: url)
+    private func openAIRequest(path: String) throws -> URLRequest {
+        var request = URLRequest(url: descriptor.baseURL!.appending(path: path))
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(multipartBoundary)",
                          forHTTPHeaderField: "Content-Type")
